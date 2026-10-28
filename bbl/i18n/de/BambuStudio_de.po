@@ -23865,3 +23865,117 @@ msgstr ""
 
 #~ msgid "⌥+Left mouse button"
 #~ msgstr "⌥+Linke Maustaste"
+
+msgid "Lighter shading filament"
+msgstr "Filament für helleres Shading"
+
+msgid "Filament printed behind the outer wall where the airbrush painted lighter shades. 0 picks the brightest filament automatically."
+msgstr "Filament, das hinter der Außenwand gedruckt wird, wo der Airbrush hellere Töne gesprüht hat. 0 wählt automatisch das hellste Filament."
+
+msgid "Darker shading filament"
+msgstr "Filament für dunkleres Shading"
+
+msgid "Filament printed behind the outer wall where the airbrush painted darker shades. 0 picks the darkest filament automatically."
+msgstr "Filament, das hinter der Außenwand gedruckt wird, wo der Airbrush dunklere Töne gesprüht hat. 0 wählt automatisch das dunkelste Filament."
+
+msgid "Shading mode"
+msgstr "Shading-Modus"
+
+msgid "How airbrush shades are built along the height. Layer alternation prints whole layers of the inner wall in the shading filament, spread evenly over the height. Sublayer thickness splits the inner wall of a layer into a shading part and a main color part whose heights follow the shade, which gives finer steps."
+msgstr "Wie die Airbrush-Töne über die Höhe aufgebaut werden. Schichtwechsel druckt ganze Schichten der Innenwand im Shading-Filament, gleichmäßig über die Höhe verteilt. Teilschicht-Dicke teilt die Innenwand einer Schicht in einen Shading-Teil und einen Teil in der Hauptfarbe, deren Höhen dem Ton folgen. Das ergibt feinere Abstufungen."
+
+msgid "Layer alternation"
+msgstr "Schichtwechsel"
+
+msgid "Sublayer thickness"
+msgstr "Teilschicht-Dicke"
+
+msgid "Shaded inner walls"
+msgstr "Getönte Innenwände"
+
+msgid "Number of inner walls behind the outer wall that are printed in the shading filament."
+msgstr "Anzahl der Innenwände hinter der Außenwand, die im Shading-Filament gedruckt werden."
+
+msgid "Shading strength"
+msgstr "Shading-Stärke"
+
+msgid "Scales all airbrush shades. 100% prints the strongest shade with the shading filament on every layer."
+msgstr "Skaliert alle Airbrush-Töne. Bei 100 % wird der stärkste Ton in jeder Schicht mit dem Shading-Filament gedruckt."
+
+msgid "Minimum shading sublayer"
+msgstr "Kleinste Shading-Teilschicht"
+
+msgid "Thinnest part of a layer printed in one color when the shading mode is sublayer thickness. Thinner parts are carried over to the next layers."
+msgstr "Dünnster Teil einer Schicht, der im Modus Teilschicht-Dicke in einer Farbe gedruckt wird. Dünnere Teile werden auf die nächsten Schichten übertragen."
+
+msgid "Outer wall tint"
+msgstr "Außenwand-Tönung"
+
+msgid "Only with sublayer thickness: also prints the bottom part of the outer wall in the shading filament, with this share of the shade. Gives much stronger shades, but the surface shows fine stripes. 0% keeps the outer wall in the main color."
+msgstr "Nur mit Teilschicht-Dicke: druckt zusätzlich den unteren Teil der Außenwand im Shading-Filament, mit diesem Anteil des Tons. Ergibt deutlich kräftigere Töne, die Oberfläche zeigt dann aber feine Streifen. 0 % lässt die Außenwand in der Hauptfarbe."
+
+msgid "Airbrush shading"
+msgstr "Airbrush-Shading"
+
+msgid "Spray the chosen direction"
+msgstr "In die gewählte Richtung sprühen"
+
+msgid "Spray the opposite direction"
+msgstr "In die Gegenrichtung sprühen"
+
+msgid "Erase shading"
+msgstr "Shading radieren"
+
+msgid "Fill the area with the shade"
+msgstr "Fläche mit dem Ton füllen"
+
+msgid "Erase the area"
+msgstr "Fläche radieren"
+
+msgid "Left mouse drag"
+msgstr "Linke Maustaste ziehen"
+
+msgid "Gradient across the area under the start point"
+msgstr "Verlauf über die Fläche unter dem Startpunkt"
+
+msgid "Erase all shading"
+msgstr "Gesamtes Shading löschen"
+
+msgid "Darker"
+msgstr "Dunkler"
+
+msgid "Lighter"
+msgstr "Heller"
+
+msgid "Hardness"
+msgstr "Härte"
+
+msgid "Shade"
+msgstr "Ton"
+
+msgid "Start shade"
+msgstr "Startton"
+
+msgid "End shade"
+msgstr "Endton"
+
+msgid "Airbrush (circle)"
+msgstr "Airbrush (Kreis)"
+
+msgid "Airbrush (sphere)"
+msgstr "Airbrush (Kugel)"
+
+msgid "Gradient"
+msgstr "Verlauf"
+
+msgid "-100% = darkest, 100% = lightest"
+msgstr "-100 % = am dunkelsten, 100 % = am hellsten"
+
+msgid "Darker shades"
+msgstr "Dunklere Töne"
+
+msgid "Lighter shades"
+msgstr "Hellere Töne"
+
+msgid "no matching filament, set it in the process settings"
+msgstr "kein passendes Filament, in den Prozesseinstellungen festlegen"
