@@ -11710,6 +11710,7 @@ bool Plater::priv::replace_volume_with_stl(int object_idx, int volume_idx, const
         new_volume->convert_from_meters();
     new_volume->supported_facets.assign(old_volume->supported_facets);
     new_volume->fuzzy_skin_facets.assign(old_volume->fuzzy_skin_facets);
+    new_volume->shade_facets.assign(old_volume->shade_facets);
     new_volume->seam_facets.assign(old_volume->seam_facets);
     new_volume->mmu_segmentation_facets.assign(old_volume->mmu_segmentation_facets);
     std::swap(old_model_object->volumes[volume_idx], old_model_object->volumes.back());
@@ -25874,9 +25875,11 @@ void Plater::clear_before_change_mesh(int obj_idx)
     // may be different and they would make no sense.
     bool paint_removed = false;
     for (ModelVolume* mv : mo->volumes) {
-        paint_removed |= !mv->supported_facets.empty() || !mv->fuzzy_skin_facets.empty() || !mv->seam_facets.empty() || !mv->mmu_segmentation_facets.empty();
+        paint_removed |= !mv->supported_facets.empty() || !mv->fuzzy_skin_facets.empty() || !mv->seam_facets.empty() || !mv->mmu_segmentation_facets.empty() ||
+                         !mv->shade_facets.empty();
         mv->supported_facets.reset();
         mv->fuzzy_skin_facets.reset();
+        mv->shade_facets.reset();
         mv->seam_facets.reset();
         mv->mmu_segmentation_facets.reset();
     }
@@ -25901,9 +25904,11 @@ void Plater::clear_before_change_mesh(int obj_idx, int vol_idx)
         if (vol_idx != i) { continue; }
         auto mv    = mo->volumes[i];
         model_name = mv->name;
-        paint_removed |= !mv->supported_facets.empty() || !mv->fuzzy_skin_facets.empty() || !mv->seam_facets.empty() || !mv->mmu_segmentation_facets.empty();
+        paint_removed |= !mv->supported_facets.empty() || !mv->fuzzy_skin_facets.empty() || !mv->seam_facets.empty() || !mv->mmu_segmentation_facets.empty() ||
+                         !mv->shade_facets.empty();
         mv->supported_facets.reset();
         mv->fuzzy_skin_facets.reset();
+        mv->shade_facets.reset();
         mv->seam_facets.reset();
         mv->mmu_segmentation_facets.reset();
     }

@@ -31,6 +31,7 @@
 #include "GUI_App.hpp"
 #include "DeviceCore/DevConfigUtil.h"
 #include "libslic3r/FilamentMixer.hpp"
+#include "libslic3r/Shading.hpp"
 #include "libslic3r/AppConfig.hpp"
 #include "libslic3r/PresetBundle.hpp"
 #include "BackgroundSlicingProcess.hpp"
@@ -1176,6 +1177,13 @@ std::vector<int> PartPlate::get_extruders(bool conside_custom_gcode) const
 			plate_extruders.insert(plate_extruders.end(), volume_extruders.begin(), volume_extruders.end());
 		}
 
+		// Airbrush shading prints the inner walls with the shading filaments.
+		if (mo->is_shade_painted()) {
+			const Shading::ShadeSettings shade_settings = Shading::ShadeSettings::from_config(wxGetApp().preset_bundle->full_config());
+			for (unsigned int filament : Shading::used_shading_filaments(*mo, shade_settings))
+				plate_extruders.push_back(int(filament) + 1);
+		}
+
 		// layer range
         for (auto layer_range : mo->layer_config_ranges) {
             if (layer_range.second.has("extruder")) {
@@ -1333,6 +1341,11 @@ std::vector<int> PartPlate::get_extruders_under_cli(bool conside_custom_gcode, D
                 }
             }
 
+            // Airbrush shading prints the inner walls with the shading filaments.
+            if (object->is_shade_painted())
+                for (unsigned int filament : Shading::used_shading_filaments(*object, Shading::ShadeSettings::from_config(full_config)))
+                    plate_extruders.push_back(int(filament) + 1);
+
 		// filaments for features
             bool enabled_SFFF_mo = object->config.option("separate_filaments_for_features") && object->config.option("separate_filaments_for_features")->getBool(),
                  mo_not_override = object->config.option("separate_filaments_for_features") == nullptr;
@@ -1480,6 +1493,11 @@ std::vector<int> PartPlate::get_extruders_without_support(bool conside_custom_gc
 		for (ModelVolume* mv : mo->volumes) {
 			std::vector<int> volume_extruders = mv->get_extruders();
 			plate_extruders.insert(plate_extruders.end(), volume_extruders.begin(), volume_extruders.end());
+		}
+		if (mo->is_shade_painted()) {
+			const Shading::ShadeSettings shade_settings = Shading::ShadeSettings::from_config(wxGetApp().preset_bundle->full_config());
+			for (unsigned int filament : Shading::used_shading_filaments(*mo, shade_settings))
+				plate_extruders.push_back(int(filament) + 1);
 		}
 	}
 

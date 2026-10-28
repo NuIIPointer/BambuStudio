@@ -24,6 +24,7 @@
 #include "slic3r/GUI/Gizmos/GLGizmoSeam.hpp"
 #include "slic3r/GUI/Gizmos/GLGizmoMmuSegmentation.hpp"
 #include "slic3r/GUI/Gizmos/GLGizmoFuzzySkin.hpp"
+#include "slic3r/GUI/Gizmos/GLGizmoAirbrush.hpp"
 #include "slic3r/GUI/Gizmos/GLGizmoSimplify.hpp"
 #include "slic3r/GUI/Gizmos/GLGizmoText.hpp"
 #include "slic3r/GUI/Gizmos/GLGizmoSVG.hpp"
@@ -116,6 +117,7 @@ bool GLGizmosManager::init()
     m_gizmos.emplace_back(new GLGizmoSeam(m_parent, EType::Seam));
     m_gizmos.emplace_back(new GLGizmoBrimEars(m_parent, EType::BrimEars));
     m_gizmos.emplace_back(new GLGizmoFuzzySkin(m_parent, EType::FuzzySkin));
+    m_gizmos.emplace_back(new GLGizmoAirbrush(m_parent, EType::Airbrush));
     m_gizmos.emplace_back(new GLGizmoMeasure(m_parent, EType::Measure));
     m_gizmos.emplace_back(new GLGizmoSimplify(m_parent, EType::Simplify));
 
@@ -700,6 +702,7 @@ bool GLGizmosManager::is_paint_gizmo() const
 {
     return m_current == EType::FdmSupports ||
            m_current == EType::FuzzySkin ||
+           m_current == EType::Airbrush ||
            m_current == EType::MmuSegmentation ||
            m_current == EType::Seam;
 }
@@ -1335,6 +1338,12 @@ bool GLGizmosManager::on_key(wxKeyEvent& evt)
                     }
                 }
             }
+        } else if (m_current == Airbrush) {
+            GLGizmoAirbrush *airbrush = dynamic_cast<GLGizmoAirbrush *>(get_current());
+            if (airbrush != nullptr && (keyCode == 'F' || keyCode == 'S' || keyCode == 'C' || keyCode == 'G'))
+                processed = airbrush->on_key_down_select_tool_type(keyCode);
+            if (processed)
+                wxGetApp().imgui()->set_requires_extra_frame();
         } else if (m_current == FuzzySkin) {
             GLGizmoFuzzySkin *fuzzy_skin = dynamic_cast<GLGizmoFuzzySkin *>(get_current());
             if (fuzzy_skin != nullptr && (keyCode == 'F' || keyCode == 'S' || keyCode == 'C' || keyCode == 'T')) {
@@ -1507,6 +1516,8 @@ std::string GLGizmosManager::convert_gizmo_type_to_string(Slic3r::GUI::GLGizmosM
         return "Color Painting";
     case Slic3r::GUI::GLGizmosManager::EType::FuzzySkin:
         return "FuzzySkin";
+    case Slic3r::GUI::GLGizmosManager::EType::Airbrush:
+        return "Airbrush";
     case Slic3r::GUI::GLGizmosManager::EType::Measure:
         return "Mesause";
     case Slic3r::GUI::GLGizmosManager::EType::Assembly:

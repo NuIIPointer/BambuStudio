@@ -3226,6 +3226,15 @@ void TabPrint::build()
         optgroup->append_single_option_line("initial_layer_print_height", "layer-height");
         optgroup->append_single_option_line("enable_mixed_color_sublayer");
 
+        optgroup = page->new_optgroup(L("Airbrush shading"), L"param_layer_height");
+        optgroup->append_single_option_line("shading_mode");
+        optgroup->append_single_option_line("shading_light_filament");
+        optgroup->append_single_option_line("shading_dark_filament");
+        optgroup->append_single_option_line("shading_strength");
+        optgroup->append_single_option_line("shading_wall_depth");
+        optgroup->append_single_option_line("shading_min_sublayer_height");
+        optgroup->append_single_option_line("shading_outer_wall_ratio");
+
         optgroup = page->new_optgroup(L("Line width"), L"param_line_width");
         optgroup->append_single_option_line("line_width","parameter/line-width");
         optgroup->append_single_option_line("initial_layer_line_width","parameter/line-width");

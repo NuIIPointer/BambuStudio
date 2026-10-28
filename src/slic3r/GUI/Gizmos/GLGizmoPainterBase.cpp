@@ -986,7 +986,11 @@ bool GLGizmoPainterBase::gizmo_event(SLAGizmoEventType action, const Vec2d& mous
             } else if (m_tool_type == ToolType::BRUSH) {
                 assert(m_cursor_type == TriangleSelector::CursorType::CIRCLE || m_cursor_type == TriangleSelector::CursorType::SPHERE);
 
-                if (projected_mouse_positions.size() == 1) {
+                const Button stroke_button = action == SLAGizmoEventType::Dragging ? m_button_down :
+                                             (action == SLAGizmoEventType::LeftDown ? Button::Left : Button::Right);
+                if (this->paint_brush_stroke(*m_triangle_selectors[mesh_idx], projected_mouse_positions, camera_pos, trafo_matrix, clp, stroke_button, shift_down)) {
+                    // Painted by the gizmo itself.
+                } else if (projected_mouse_positions.size() == 1) {
                     const ProjectedMousePosition& first_position = projected_mouse_positions.front();
                     std::unique_ptr<TriangleSelector::Cursor> cursor = TriangleSelector::SinglePointCursor::cursor_factory(first_position.mesh_hit,
                         camera_pos, m_cursor_radius,

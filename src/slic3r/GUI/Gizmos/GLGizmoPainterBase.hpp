@@ -24,7 +24,8 @@ enum class PainterGizmoType {
     FDM_SUPPORTS,
     FUZZY_SKIN,
     SEAM,
-    MMU_SEGMENTATION
+    MMU_SEGMENTATION,
+    AIRBRUSH
 };
 
 class GLPaintContour
@@ -333,6 +334,18 @@ protected:
         Left,
         Right
     };
+
+    // Lets a gizmo paint a brush stroke itself, e.g. the soft airbrush. Returns false to paint with select_patch().
+    virtual bool paint_brush_stroke(TriangleSelectorGUI                       &selector,
+                                    const std::vector<ProjectedMousePosition> &positions,
+                                    const Vec3f                               &camera_pos,
+                                    const Transform3d                         &trafo_matrix,
+                                    const TriangleSelector::ClippingPlane     &clp,
+                                    Button                                     button,
+                                    bool                                       shift_down)
+    {
+        return false;
+    }
 
     struct ClippingPlaneDataWrapper
     {

@@ -3367,6 +3367,7 @@ void ObjectList::merge(bool to_multipart_object)
                 new_volume->supported_facets.assign(std::move(volume->supported_facets));
                 new_volume->seam_facets.assign(std::move(volume->seam_facets));
                 new_volume->fuzzy_skin_facets.assign(std::move(volume->fuzzy_skin_facets));
+                new_volume->shade_facets.assign(std::move(volume->shade_facets));
             }
             new_object->sort_volumes(true);
 

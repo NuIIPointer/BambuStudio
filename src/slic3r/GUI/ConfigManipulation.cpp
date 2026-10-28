@@ -1034,6 +1034,13 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, in
     // wall_filament uses the same logic as in Print::extruders()
     toggle_field("wall_filament", have_perimeters || have_brim);
 
+    // Airbrush shading: sublayer settings only matter in the sublayer thickness mode.
+    if (config->has("shading_mode")) {
+        const bool shading_sublayer = config->opt_enum<ShadingMode>("shading_mode") == ShadingMode::Sublayer;
+        toggle_field("shading_min_sublayer_height", shading_sublayer);
+        toggle_field("shading_outer_wall_ratio", shading_sublayer);
+    }
+
     bool have_raft = config->opt_int("raft_layers") > 0;
     bool have_support_material = config->opt_bool("enable_support") || have_raft;
     // BBS

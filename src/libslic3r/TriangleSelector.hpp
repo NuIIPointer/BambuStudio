@@ -55,6 +55,9 @@ public:
         virtual int  vertices_inside(const Triangle &tr, const std::vector<Vertex> &vertices) const;
         virtual bool is_edge_inside_cursor(const Triangle &tr, const std::vector<Vertex> &vertices) const = 0;
         virtual bool is_facet_visible(int facet_idx, const std::vector<Vec3f> &face_normals) const = 0;
+        // Distance of a mesh point from the cursor center relative to the radius, for soft brushes.
+        // Values >= 1 (or clipped points) are outside of the cursor.
+        virtual float distance_ratio(const Vec3f &point) const { return is_mesh_point_inside(point) ? 0.f : 1.f; }
 
         static bool is_facet_visible(const Cursor &cursor, int facet_idx, const std::vector<Vec3f> &face_normals);
 
@@ -138,6 +141,7 @@ public:
         bool is_mesh_point_inside(const Vec3f &point) const override;
         bool is_edge_inside_cursor(const Triangle &tr, const std::vector<Vertex> &vertices) const override;
         bool is_facet_visible(int facet_idx, const std::vector<Vec3f> &face_normals) const override { return true; }
+        float distance_ratio(const Vec3f &point) const override;
     };
 
     class Circle : public SinglePointCursor
@@ -154,6 +158,7 @@ public:
         {
             return TriangleSelector::Cursor::is_facet_visible(*this, facet_idx, face_normals);
         }
+        float distance_ratio(const Vec3f &point) const override;
     };
 
     // BBS
@@ -233,6 +238,16 @@ public:
                       const Transform3d        &trafo_no_translate,            // matrix to get from mesh to world without translation
                       bool                      triangle_splitting,            // If triangles will be split base on the cursor or not
                       float                     highlight_by_angle_deg = 0.f); // The maximal angle of overhang. If it is set to a non-zero value, it is possible to paint only the triangles of overhang defined by this angle in degrees.
+
+    // Soft brush (airbrush): changes the state of every leaf triangle inside the cursor to modify(old_state, weight).
+    // The weight is 1 inside the hard core of the cursor (hardness = core radius / cursor radius) and falls off
+    // with a cosine to 0 at the border. Triangles are split fine enough to resolve the falloff.
+    using AirbrushModifier = std::function<EnforcerBlockerType(EnforcerBlockerType old_state, float weight)>;
+    void airbrush_patch(int facet_start, std::unique_ptr<Cursor> &&cursor, const AirbrushModifier &modify, float hardness);
+
+    // Sets every triangle selected by the last seed fill to state_at(triangle centroid in mesh coords) and clears the
+    // seed fill selection. The selected triangles are split down to max_edge first so that the field is resolved.
+    void seed_fill_apply_field(const std::function<EnforcerBlockerType(const Vec3f &centroid)> &state_at, float max_edge);
 
     void seed_fill_select_triangles(const Vec3f        &hit,                          // point where to start
                                     int                 facet_start,                  // facet of the original mesh (unsplit) that the hit point belongs to
@@ -467,6 +482,9 @@ protected:
 private:
     bool select_triangle(int facet_idx, EnforcerBlockerType type, bool triangle_splitting);
     bool select_triangle_recursive(int facet_idx, const Vec3i &neighbors, EnforcerBlockerType type, bool triangle_splitting);
+    bool airbrush_triangle_recursive(int facet_idx, const Vec3i &neighbors, const AirbrushModifier &modify, float hardness);
+    // selected: the triangle lies in the seed fill selection (its leafs are split and set), otherwise only selected leafs below it are.
+    void apply_field_recursive(int facet_idx, const Vec3i &neighbors, const std::function<EnforcerBlockerType(const Vec3f &centroid)> &state_at, bool selected);
     // Everything a paint_region() walk carries from the top down, bundled so the recursion
     // keeps a short signature and so the cancel poll can share one counter with the outer
     // breadth-first walk.

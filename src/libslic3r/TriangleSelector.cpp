@@ -362,6 +362,100 @@ void TriangleSelector::select_patch(int facet_start, std::unique_ptr<Cursor> &&c
     }
 }
 
+void TriangleSelector::airbrush_patch(int facet_start, std::unique_ptr<Cursor> &&cursor, const AirbrushModifier &modify, float hardness)
+{
+    assert(facet_start < m_orig_size_indices);
+    m_cursor = std::move(cursor);
+    // Split fine enough to resolve the falloff, but keep large brushes affordable.
+    set_edge_limit(std::clamp(m_cursor->radius / 8.f, 0.1f, 0.5f));
+    // Make select_patch() set its own edge limit again.
+    m_old_cursor_radius_sqr = -1.f;
+    hardness = std::clamp(hardness, 0.f, 0.99f);
+
+    std::vector<bool> visited(m_orig_size_indices, false);
+    std::vector<int>  facets_to_check{ facet_start };
+    for (size_t i = 0; i < facets_to_check.size(); ++i) {
+        const int facet = facets_to_check[i];
+        if (visited[facet])
+            continue;
+        visited[facet] = true;
+        if (!m_triangles[facet].valid() || !airbrush_triangle_recursive(facet, m_neighbors[facet], modify, hardness))
+            continue;
+        remove_useless_children(facet);
+        for (int neighbor_idx : m_neighbors[facet])
+            if (neighbor_idx >= 0 && !visited[neighbor_idx] && m_cursor->is_facet_visible(neighbor_idx, m_face_normals))
+                facets_to_check.push_back(neighbor_idx);
+    }
+}
+
+bool TriangleSelector::airbrush_triangle_recursive(int facet_idx, const Vec3i &neighbors, const AirbrushModifier &modify, float hardness)
+{
+    Triangle *tr = &m_triangles[facet_idx];
+    if (!tr->valid())
+        return false;
+    if (m_cursor->vertices_inside(*tr, m_vertices) == 0 && !m_cursor->is_pointer_in_triangle(*tr, m_vertices) &&
+        !m_cursor->is_edge_inside_cursor(*tr, m_vertices))
+        return false;
+
+    split_triangle(facet_idx, neighbors, m_cursor->uniform_scaling ? nullptr : &m_cursor->trafo);
+    tr = &m_triangles[facet_idx]; // might have been invalidated by split_triangle().
+    if (tr->is_split()) {
+        const int num_of_children = tr->number_of_split_sides() + 1;
+        for (int i = 0; i < num_of_children; ++i) {
+            airbrush_triangle_recursive(tr->children[i], this->child_neighbors(*tr, neighbors, i), modify, hardness);
+            tr = &m_triangles[facet_idx]; // might have been invalidated
+        }
+        return true;
+    }
+
+    // A leaf below the edge limit: change its state by the brush weight at its centroid.
+    const Vec3f centroid = (m_vertices[tr->verts_idxs[0]].v + m_vertices[tr->verts_idxs[1]].v + m_vertices[tr->verts_idxs[2]].v) / 3.f;
+    const float ratio    = m_cursor->distance_ratio(centroid);
+    if (ratio >= 1.f)
+        return true;
+    const float weight = ratio <= hardness ? 1.f : 0.5f + 0.5f * std::cos(float(M_PI) * (ratio - hardness) / (1.f - hardness));
+    tr->set_state(modify(tr->get_state(), weight));
+    return true;
+}
+
+void TriangleSelector::seed_fill_apply_field(const std::function<EnforcerBlockerType(const Vec3f &centroid)> &state_at, float max_edge)
+{
+    set_edge_limit(max_edge);
+    m_old_cursor_radius_sqr = -1.f;
+    for (int facet_idx = 0; facet_idx < m_orig_size_indices; ++facet_idx) {
+        if (!m_triangles[facet_idx].valid())
+            continue;
+        apply_field_recursive(facet_idx, m_neighbors[facet_idx], state_at, false);
+        if (m_triangles[facet_idx].is_split())
+            remove_useless_children(facet_idx);
+    }
+}
+
+void TriangleSelector::apply_field_recursive(int facet_idx, const Vec3i &neighbors, const std::function<EnforcerBlockerType(const Vec3f &centroid)> &state_at, bool selected)
+{
+    Triangle *tr = &m_triangles[facet_idx];
+    if (!tr->valid())
+        return;
+    if (!tr->is_split()) {
+        if (!selected && !tr->is_selected_by_seed_fill())
+            return;
+        tr->unselect_by_seed_fill();
+        selected = true;
+        split_triangle(facet_idx, neighbors, nullptr);
+        tr = &m_triangles[facet_idx]; // might have been invalidated by split_triangle().
+        if (!tr->is_split()) {
+            const Vec3f centroid = (m_vertices[tr->verts_idxs[0]].v + m_vertices[tr->verts_idxs[1]].v + m_vertices[tr->verts_idxs[2]].v) / 3.f;
+            tr->set_state(state_at(centroid));
+            return;
+        }
+    }
+    const int num_of_children = tr->number_of_split_sides() + 1;
+    for (int i = 0; i < num_of_children; ++i) {
+        apply_field_recursive(tr->children[i], this->child_neighbors(*tr, neighbors, i), state_at, selected);
+        tr = &m_triangles[facet_idx]; // might have been invalidated
+    }
+}
+
 bool TriangleSelector::is_facet_clipped(int facet_idx, const ClippingPlane &clp) const
 {
     for (int vert_idx : m_triangles[facet_idx].verts_idxs)
@@ -2427,6 +2521,23 @@ bool TriangleSelector::Circle::is_mesh_point_inside(const Vec3f &point) const
         return is_mesh_point_not_clipped(point, clipping_plane);
 
     return false;
+}
+
+float TriangleSelector::Sphere::distance_ratio(const Vec3f &point) const
+{
+    if (!is_mesh_point_not_clipped(point, clipping_plane))
+        return FLT_MAX;
+    const Vec3f transformed_point = uniform_scaling ? point : Vec3f(trafo * point);
+    return (center - transformed_point).norm() / radius;
+}
+
+float TriangleSelector::Circle::distance_ratio(const Vec3f &point) const
+{
+    if (!is_mesh_point_not_clipped(point, clipping_plane))
+        return FLT_MAX;
+    const Vec3f transformed_point = uniform_scaling ? point : Vec3f(trafo * point);
+    const Vec3f diff              = center - transformed_point;
+    return (diff - diff.dot(dir) * dir).norm() / radius;
 }
 
 // Is a point (in mesh coords) inside a Capsule3D cursor?
