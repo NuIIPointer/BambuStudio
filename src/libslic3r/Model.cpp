@@ -1548,6 +1548,11 @@ bool ModelObject::is_fuzzy_skin_painted() const
     return std::any_of(this->volumes.cbegin(), this->volumes.cend(), [](const ModelVolume *mv) { return mv->is_fuzzy_skin_facets_painted(); });
 }
 
+bool ModelObject::is_shade_painted() const
+{
+    return std::any_of(this->volumes.cbegin(), this->volumes.cend(), [](const ModelVolume *mv) { return mv->is_model_part() && mv->is_shade_painted(); });
+}
+
 void ModelObject::sort_volumes(bool full_sort)
 {
     // sort volumes inside the object to order "Model Part, Negative Volume, Modifier, Support Blocker and Support Enforcer. "
@@ -1982,6 +1987,7 @@ void ModelObject::convert_units(ModelObjectPtrs& new_objects, ConversionType con
 
             vol->supported_facets.assign(volume->supported_facets);
             vol->fuzzy_skin_facets.assign(volume->fuzzy_skin_facets);
+            vol->shade_facets.assign(volume->shade_facets);
             vol->seam_facets.assign(volume->seam_facets);
             vol->mmu_segmentation_facets.assign(volume->mmu_segmentation_facets);
 
@@ -2519,6 +2525,7 @@ ModelObjectPtrs ModelObject::cut(size_t instance, std::array<Vec3d, 4> plane_poi
 
         volume->supported_facets.reset();
         volume->fuzzy_skin_facets.reset();
+        volume->shade_facets.reset();
         volume->seam_facets.reset();
         volume->mmu_segmentation_facets.reset();
 
@@ -2610,6 +2617,7 @@ ModelObjectPtrs ModelObject::segment(size_t instance, unsigned int max_extruders
 
         volume->supported_facets.reset();
         volume->fuzzy_skin_facets.reset();
+        volume->shade_facets.reset();
         volume->seam_facets.reset();
 
         if (!volume->is_model_part()) {
@@ -2844,7 +2852,7 @@ ModelObjectPtrs ModelObject::merge_volumes(std::vector<int>& vol_indeces)
     // order (only vertex indices are offset), so face f of the merged mesh maps
     // exactly to the captured per-part triangles below. Capture before
     // reset_mesh() empties the source volumes.
-    std::vector<std::string> merged_supported, merged_seam, merged_mmu, merged_fuzzy;
+    std::vector<std::string> merged_supported, merged_seam, merged_mmu, merged_fuzzy, merged_shade;
     for (int i : vol_indeces) {
         auto volume = volumes[i];
         if (!volume->mesh().empty()) {
@@ -2854,6 +2862,7 @@ ModelObjectPtrs ModelObject::merge_volumes(std::vector<int>& vol_indeces)
                 merged_seam.emplace_back(volume->seam_facets.get_triangle_as_string((int)f));
                 merged_mmu.emplace_back(volume->mmu_segmentation_facets.get_triangle_as_string((int)f));
                 merged_fuzzy.emplace_back(volume->fuzzy_skin_facets.get_triangle_as_string((int)f));
+                merged_shade.emplace_back(volume->shade_facets.get_triangle_as_string((int)f));
             }
             const auto volume_matrix = volume->get_matrix();
             TriangleMesh mesh_(volume->mesh());
@@ -2880,6 +2889,7 @@ ModelObjectPtrs ModelObject::merge_volumes(std::vector<int>& vol_indeces)
         if (!merged_seam[f].empty())      vol->seam_facets.set_triangle_from_string((int)f, merged_seam[f]);
         if (!merged_mmu[f].empty())       vol->mmu_segmentation_facets.set_triangle_from_string((int)f, merged_mmu[f]);
         if (!merged_fuzzy[f].empty())     vol->fuzzy_skin_facets.set_triangle_from_string((int)f, merged_fuzzy[f]);
+        if (!merged_shade[f].empty())     vol->shade_facets.set_triangle_from_string((int)f, merged_shade[f]);
     }
     for (int i = 0; i < volumes.size();i++) {
         if (std::find(vol_indeces.begin(), vol_indeces.end(), i) != vol_indeces.end()) {
@@ -3218,6 +3228,7 @@ void ModelVolume::set_material_id(t_model_material_id material_id)
 void ModelVolume::reset_extra_facets() {
     this->supported_facets.reset();
     this->fuzzy_skin_facets.reset();
+    this->shade_facets.reset();
     this->seam_facets.reset();
     this->mmu_segmentation_facets.reset();
 }
@@ -3265,6 +3276,8 @@ void ModelVolume::commit_mesh_keep_paint(PaintKeepPrepared &&prepared)
     this->seam_facets.assign(std::move(prepared.seam));
     this->mmu_segmentation_facets.assign(std::move(prepared.mmu));
     this->fuzzy_skin_facets.assign(std::move(prepared.fuzzy));
+    // Airbrush shading is not re-projected yet; drop it instead of keeping indices of the old mesh.
+    this->shade_facets.reset();
 }
 
 bool ModelVolume::set_mesh_keep_paint(TriangleMesh &&mesh_in,
@@ -3677,11 +3690,14 @@ size_t ModelVolume::split(unsigned int max_extruders, float scale_det)
     tris_sup_strs.reserve(face_count);
     tris_seam_strs.reserve(face_count);
     tris_fuzzy_strs.reserve(face_count);
+    std::vector<std::string> tris_shade_strs;
+    tris_shade_strs.reserve(face_count);
     for (size_t i = 0; i < face_count; i++) {
         tris_split_strs.emplace_back(mmu_segmentation_facets.get_triangle_as_string(i));
         tris_sup_strs.emplace_back(supported_facets.get_triangle_as_string(i));
         tris_seam_strs.emplace_back(seam_facets.get_triangle_as_string(i));
         tris_fuzzy_strs.emplace_back(fuzzy_skin_facets.get_triangle_as_string(i));
+        tris_shade_strs.emplace_back(shade_facets.get_triangle_as_string(i));
     }
     int last_all_mesh_face_count = 0;
     for (TriangleMesh &mesh : meshes) {
@@ -3704,6 +3720,7 @@ size_t ModelVolume::split(unsigned int max_extruders, float scale_det)
             this->exterior_facets.reset();
             this->supported_facets.reset();
             this->fuzzy_skin_facets.reset();
+            this->shade_facets.reset();
             this->seam_facets.reset();
             for (size_t i = 0; i < cur_face_count; i++) {
                 if (ships[idx].find(i) != ships[idx].end()) {
@@ -3716,6 +3733,8 @@ size_t ModelVolume::split(unsigned int max_extruders, float scale_det)
                         seam_facets.set_triangle_from_string(i, tris_seam_strs[index]);
                     if (tris_fuzzy_strs[index].size() > 0)
                         fuzzy_skin_facets.set_triangle_from_string(i, tris_fuzzy_strs[index]);
+                    if (tris_shade_strs[index].size() > 0)
+                        shade_facets.set_triangle_from_string(i, tris_shade_strs[index]);
                 }
             }
         } else {
@@ -3732,6 +3751,8 @@ size_t ModelVolume::split(unsigned int max_extruders, float scale_det)
                         new_mv->seam_facets.set_triangle_from_string(i, tris_seam_strs[index]);
                     if (tris_fuzzy_strs[index].size() > 0)
                         new_mv->fuzzy_skin_facets.set_triangle_from_string(i, tris_fuzzy_strs[index]);
+                    if (tris_shade_strs[index].size() > 0)
+                        new_mv->shade_facets.set_triangle_from_string(i, tris_shade_strs[index]);
                 }
             }
         }
@@ -3806,6 +3827,7 @@ void ModelVolume::assign_new_unique_ids_recursive()
     config.set_new_unique_id();
     supported_facets.set_new_unique_id();
     fuzzy_skin_facets.set_new_unique_id();
+    shade_facets.set_new_unique_id();
     seam_facets.set_new_unique_id();
     mmu_segmentation_facets.set_new_unique_id();
 }
@@ -4782,6 +4804,13 @@ bool model_custom_fuzzy_skin_data_changed(const ModelObject &mo, const ModelObje
     return model_property_changed(
         mo, mo_new, [](const ModelVolumeType t) { return t == ModelVolumeType::MODEL_PART; },
         [](const ModelVolume &mv_old, const ModelVolume &mv_new) { return mv_old.fuzzy_skin_facets.timestamp_matches(mv_new.fuzzy_skin_facets); });
+}
+
+bool model_custom_shade_data_changed(const ModelObject &mo, const ModelObject &mo_new)
+{
+    return model_property_changed(
+        mo, mo_new, [](const ModelVolumeType t) { return t == ModelVolumeType::MODEL_PART; },
+        [](const ModelVolume &mv_old, const ModelVolume &mv_new) { return mv_old.shade_facets.timestamp_matches(mv_new.shade_facets); });
 }
 
 bool model_custom_seam_data_changed(const ModelObject& mo, const ModelObject& mo_new)
