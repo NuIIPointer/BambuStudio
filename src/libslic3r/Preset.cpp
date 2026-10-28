@@ -1070,6 +1070,8 @@ static std::vector<std::string> s_Preset_print_options {
     "prime_tower_flat_ironing","enable_circle_compensation", "circle_compensation_manual_offset", "apply_scarf_seam_on_circles",
     "wipe_tower_no_sparse_layers", "compatible_printers", "compatible_printers_condition", "inherits",
     "flush_into_infill", "flush_into_objects", "flush_into_support","process_notes", "enable_mixed_color_sublayer",
+    "shading_light_filament", "shading_dark_filament", "shading_mode", "shading_wall_depth", "shading_strength",
+    "shading_min_sublayer_height", "shading_outer_wall_ratio",
     // BBS
      "tree_support_branch_angle", "tree_support_wall_count", "tree_support_branch_distance", "tree_support_branch_diameter",
     "tree_support_branch_diameter_angle",

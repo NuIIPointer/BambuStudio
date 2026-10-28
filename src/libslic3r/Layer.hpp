@@ -7,6 +7,7 @@
 #include "SurfaceCollection.hpp"
 #include "ExtrusionEntityCollection.hpp"
 #include "RegionExpansion.hpp"
+#include "Shading.hpp"
 #include <libslic3r/Print.hpp>
 
 namespace Slic3r {
@@ -74,6 +75,8 @@ public:
     // ordered collection of extrusion paths/loops to build all perimeters
     // (this collection contains only ExtrusionEntityCollection objects)
     ExtrusionEntityCollection   perimeters;
+    // Airbrush shading: one tag per entry of perimeters.entities when the layer has shaded walls, empty otherwise.
+    std::vector<Shading::ShadeTag> perimeters_shade;
 
     // ordered collection of extrusion paths to fill surfaces
     // (this collection contains only ExtrusionEntityCollection objects)

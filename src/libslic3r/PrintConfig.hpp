@@ -138,6 +138,12 @@ enum class BedTempFormula {
     count,
 };
 
+// Airbrush shading: how a shade level is turned into shade filament along Z.
+enum class ShadingMode {
+    LayerAlternation,
+    Sublayer,
+};
+
 // BBS
 enum class WallSequence {
     InnerOuter,
@@ -578,6 +584,7 @@ CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(TopOneWallType)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(ReduceInfillRetractionMode)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(FilamentMetalStickiness)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(CounterboreHoleBridgingOption)
+CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(ShadingMode)
 #undef CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS
 
 // Defines each and every confiuration option of Slic3r, including the properties of the GUI dialogs.
@@ -1579,6 +1586,13 @@ PRINT_CONFIG_CLASS_DERIVED_DEFINE(
     ((ConfigOptionInts,               nozzle_temperature_range_high))
     ((ConfigOptionFloatsNullable,     wipe_distance))
     ((ConfigOptionBool,               enable_mixed_color_sublayer))
+    ((ConfigOptionInt,                shading_light_filament))
+    ((ConfigOptionInt,                shading_dark_filament))
+    ((ConfigOptionEnum<ShadingMode>,  shading_mode))
+    ((ConfigOptionInt,                shading_wall_depth))
+    ((ConfigOptionPercent,            shading_strength))
+    ((ConfigOptionFloat,              shading_min_sublayer_height))
+    ((ConfigOptionPercent,            shading_outer_wall_ratio))
     ((ConfigOptionBool,               enable_prime_tower))
     ((ConfigOptionBool,               prime_tower_enable_framework))
     // BBS: change wipe_tower_x and wipe_tower_y data type to floats to add partplate logic

@@ -741,6 +741,8 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
         }
     }
 
+    const Shading::ShadeSettings shade_settings = Shading::ShadeSettings::from_config(object.print()->config());
+
     // BBS: collect first layer extruders of an object's wall, which will be used by brim generator
     int layerCount = 0;
     std::vector<int> firstLayerExtruders;
@@ -786,6 +788,16 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
                		layer_tools.extruders.emplace_back((extruder_override == 0) ? region.config().wall_filament.value : extruder_override);
                     if (layerCount == 0) {
                         firstLayerExtruders.emplace_back((extruder_override == 0) ? region.config().wall_filament.value : extruder_override);
+                    }
+                }
+
+                // Airbrush shading: the shaded wall pieces of this layer may need the shading filaments.
+                if (extruder_override == 0 && !layerm->perimeters_shade.empty()) {
+                    const int main_filament = int(region.config().wall_filament.value) - 1;
+                    for (const Shading::ShadeTag &tag : layerm->perimeters_shade) {
+                        const Shading::ShadePlan plan = Shading::plan_shade(shade_settings, tag, layer->id(), layer->print_z, layer->height, main_filament);
+                        if (plan.active())
+                            layer_tools.extruders.emplace_back(plan.filament + 1);
                     }
                 }
 

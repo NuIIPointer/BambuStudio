@@ -4868,6 +4868,8 @@ GCode::LayerResult GCode::process_layer(
     std::map<unsigned int, std::vector<ObjectByExtruder>> by_extruder;
     std::map<std::pair<const SupportLayer *, ExtrusionRole>, unsigned int> support_filaments;
     bool is_anything_overridden = const_cast<LayerTools&>(layer_tools).wiping_extrusions().is_anything_overridden();
+    const Shading::ShadeSettings shade_settings = Shading::ShadeSettings::from_config(print.config());
+    m_shade_sublayers.clear();
     for (const LayerToPrint &layer_to_print : layers) {
         if (layer_to_print.support_layer != nullptr) {
             const SupportLayer &support_layer = *layer_to_print.support_layer;
@@ -5024,7 +5026,10 @@ GCode::LayerResult GCode::process_layer(
                 std::vector<unsigned int> printing_extruders;
                 for (const ObjectByExtruder::Island::Region::Type entity_type : { ObjectByExtruder::Island::Region::INFILL, ObjectByExtruder::Island::Region::PERIMETERS }) {
                     bool is_infill = entity_type == ObjectByExtruder::Island::Region::INFILL;
-                    for (const ExtrusionEntity *ee : is_infill ? layerm->fills.entities : layerm->perimeters.entities) {
+                    const ExtrusionEntitiesPtr &region_entities = is_infill ? layerm->fills.entities : layerm->perimeters.entities;
+                    const bool has_shade = !is_infill && layerm->perimeters_shade.size() == region_entities.size();
+                    for (size_t entity_idx = 0; entity_idx < region_entities.size(); ++ entity_idx) {
+                        const ExtrusionEntity *ee = region_entities[entity_idx];
                         // extrusions represents infill or perimeter extrusions of a single island.
                         assert(dynamic_cast<const ExtrusionEntityCollection*>(ee) != nullptr);
                         const auto *extrusions = static_cast<const ExtrusionEntityCollection*>(ee);
@@ -5033,6 +5038,24 @@ GCode::LayerResult GCode::process_layer(
 
                         // This extrusion is part of certain Region, which tells us which extruder should be used for it:
                         int correct_extruder_id = layer_tools.extruder(*extrusions, region);
+
+                        // Airbrush shading: a shaded wall piece goes to the shading filament, as a whole or as a sublayer.
+                        Shading::ShadePlan shade_plan;
+                        if (has_shade && !layerm->perimeters_shade[entity_idx].empty()) {
+                            shade_plan = Shading::plan_shade(shade_settings, layerm->perimeters_shade[entity_idx], layer.id(), layer.print_z, layer.height,
+                                                             int(region.config().wall_filament.value) - 1);
+                            if (shade_plan.active() && !layer_tools.has_extruder(shade_plan.filament))
+                                shade_plan = {};
+                            // Sublayers of a mixed slot are already split by color, only whole layers can be shaded there.
+                            if (shade_plan.active() && layer_tools.is_mixed_slot(correct_extruder_id)) {
+                                if (shade_plan.height >= 0.5 * layer.height)
+                                    shade_plan.height = layer.height;
+                                else
+                                    shade_plan = {};
+                            }
+                            if (shade_plan.full(layer.height))
+                                correct_extruder_id = shade_plan.filament;
+                        }
 
                         // Let's recover vector of extruder overrides:
                         const WipingExtrusions::ExtruderPerCopy *entity_overrides = nullptr;
@@ -5060,6 +5083,18 @@ GCode::LayerResult GCode::process_layer(
                             }
                         } else
                             printing_extruders.emplace_back(correct_extruder_id);
+
+                        if (shade_plan.active() && !shade_plan.full(layer.height)) {
+                            // Both filaments print the piece, each with its own part of the layer height.
+                            const auto &order       = layer_tools.extruders;
+                            const auto  shade_it    = std::find(order.begin(), order.end(), (unsigned int) shade_plan.filament);
+                            const auto  main_it     = std::find(order.begin(), order.end(), (unsigned int) correct_extruder_id);
+                            const bool  shade_first = shade_it < main_it;
+                            for (const ExtrusionEntity *piece : extrusions->entities)
+                                m_shade_sublayers[piece] = { (unsigned int) shade_plan.filament, shade_plan.height, layer.height, layer.print_z, shade_first };
+                            printing_extruders.emplace_back(shade_plan.filament);
+                            Slic3r::sort_remove_duplicates(printing_extruders);
+                        }
 
                         // Now we must add this extrusion into the by_extruder map, once for each extruder that will print it:
                         for (unsigned int extruder : printing_extruders)
@@ -6512,7 +6547,30 @@ std::string GCode::extrude_perimeters(const Print &print, const std::vector<Obje
                     gcode += "; COOLING_NODE: " + std::to_string(ee_node_id) + "\n";
                 }
 
+                auto shade_it = m_shade_sublayers.find(ee);
+                if (shade_it == m_shade_sublayers.end() || m_sub_layer_flow_ratio > 0.) {
+                    gcode += this->extrude_entity(*ee, "perimeter", -1.);
+                    continue;
+                }
+                // Airbrush shading sublayer: this filament prints only its part of the layer height.
+                const ShadeSublayer &shade  = shade_it->second;
+                const bool           is_shade = m_writer.filament() != nullptr && m_writer.filament()->id() == shade.shade_filament;
+                const double         height   = is_shade ? shade.shade_height : shade.layer_height - shade.shade_height;
+                const bool           bottom   = is_shade == shade.shade_bottom;
+                if (height <= EPSILON)
+                    continue;
+                m_sub_layer_flow_ratio     = height / shade.layer_height;
+                m_sub_layer_height         = height;
+                m_nominal_z                = bottom ? shade.print_z - shade.layer_height + height : shade.print_z;
+                m_need_change_layer_lift_z = true;
+                m_writer.set_avoid_z_descent_travel(true);
+                gcode += "; SHADE_SUBLAYER\n";
                 gcode += this->extrude_entity(*ee, "perimeter", -1.);
+                m_writer.set_avoid_z_descent_travel(false);
+                m_sub_layer_flow_ratio     = 0.;
+                m_sub_layer_height         = 0.;
+                m_nominal_z                = shade.print_z;
+                m_need_change_layer_lift_z = true;
             }
         }
     return gcode;

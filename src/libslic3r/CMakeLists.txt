@@ -147,6 +147,8 @@ set(lisbslic3r_sources
     FlushVolCalc.hpp
     FuzzySkin.cpp
     FuzzySkin.hpp
+    Shading.cpp
+    Shading.hpp
     format.hpp
     Format/3mf.cpp
     Format/3mf.hpp

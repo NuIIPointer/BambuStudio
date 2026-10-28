@@ -388,7 +388,14 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
             || opt_key == "seam_slope_gap"
             || opt_key == "seam_slope_min_length"
             || opt_key == "embedding_wall_into_infill"
-            || opt_key == "alternate_extra_wall") {
+            || opt_key == "alternate_extra_wall"
+            || opt_key == "shading_light_filament"
+            || opt_key == "shading_dark_filament"
+            || opt_key == "shading_mode"
+            || opt_key == "shading_wall_depth"
+            || opt_key == "shading_strength"
+            || opt_key == "shading_min_sublayer_height"
+            || opt_key == "shading_outer_wall_ratio") {
             osteps.emplace_back(posPerimeters);
             osteps.emplace_back(posInfill);
             osteps.emplace_back(posSupportMaterial);
@@ -2033,6 +2040,8 @@ void Print::process(std::unordered_map<std::string, long long>* slice_time, bool
             if (!model_volume1.supported_facets.equals(model_volume2.supported_facets))
                 return false;
             if (!model_volume1.fuzzy_skin_facets.equals(model_volume2.fuzzy_skin_facets))
+                return false;
+            if (!model_volume1.shade_facets.equals(model_volume2.shade_facets))
                 return false;
             if (!model_volume1.seam_facets.equals(model_volume2.seam_facets))
                 return false;

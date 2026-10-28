@@ -6,6 +6,7 @@
 #include "Geometry.hpp"
 #include "I18N.hpp"
 #include "Layer.hpp"
+#include "Shading.hpp"
 #include "MutablePolygon.hpp"
 #include "Support/SupportMaterial.hpp"
 #include "Support/TreeSupport.hpp"
@@ -590,6 +591,22 @@ void PrintObject::make_perimeters()
 #endif
     m_print->throw_if_canceled();
     BOOST_LOG_TRIVIAL(debug) << "Generating perimeters in parallel - end";
+
+    // Airbrush shading: cut the shaded parts out of the walls, they get their own filament at G-code export.
+    if (std::unique_ptr<Shading::ShadeField> shade_field = Shading::ShadeField::build(*this)) {
+        const Shading::ShadeSettings shade_settings = Shading::ShadeSettings::from_config(m_print->config());
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, m_layers.size()), [this, &shade_field, &shade_settings](const tbb::blocked_range<size_t> &range) {
+            for (size_t layer_idx = range.begin(); layer_idx < range.end(); ++layer_idx) {
+                m_print->throw_if_canceled();
+                Shading::split_shaded_walls(*m_layers[layer_idx], *shade_field, shade_settings);
+            }
+        });
+        m_print->throw_if_canceled();
+    } else {
+        for (Layer *layer : m_layers)
+            for (LayerRegion *layerm : layer->regions())
+                layerm->perimeters_shade.clear();
+    }
 
     if (this->m_print->m_config.z_direction_outwall_speed_continuous) {
         // BBS: get continuity of nodes
@@ -3761,6 +3778,9 @@ std::vector<unsigned int> PrintObject::object_extruders() const
         }
     }
 #endif
+    // Airbrush shading prints the inner walls with the shading filaments.
+    if (mo->is_shade_painted())
+        append(extruders, Shading::used_shading_filaments(*mo, Shading::ShadeSettings::from_config(this->print()->config())));
     sort_remove_duplicates(extruders);
     return extruders;
 }

@@ -296,6 +296,12 @@ static t_config_enum_values s_keys_map_WallSequence {
 };
 CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(WallSequence)
 
+static t_config_enum_values s_keys_map_ShadingMode {
+    { "layer_alternation", int(ShadingMode::LayerAlternation) },
+    { "sublayer",          int(ShadingMode::Sublayer) }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(ShadingMode)
+
 static t_config_enum_values s_keys_map_EnsureVerticalThicknessLevel {
     { "disabled",     int(EnsureVerticalThicknessLevel::evtDisabled) },
     { "partial",      int(EnsureVerticalThicknessLevel::evtPartial) },
@@ -6247,6 +6253,78 @@ void PrintConfigDef::init_fff_params()
     def->category = L("Quality");
     def->mode = comSimple;
     def->set_default_value(new ConfigOptionBool(false));
+
+    def = this->add("shading_light_filament", coInt);
+    def->label = L("Lighter shading filament");
+    def->category = L("Quality");
+    def->tooltip = L("Filament printed behind the outer wall where the airbrush painted lighter shades. "
+                     "0 picks the brightest filament automatically.");
+    def->min = 0;
+    def->mode = comSimple;
+    def->set_default_value(new ConfigOptionInt(0));
+
+    def = this->add("shading_dark_filament", coInt);
+    def->label = L("Darker shading filament");
+    def->category = L("Quality");
+    def->tooltip = L("Filament printed behind the outer wall where the airbrush painted darker shades. "
+                     "0 picks the darkest filament automatically.");
+    def->min = 0;
+    def->mode = comSimple;
+    def->set_default_value(new ConfigOptionInt(0));
+
+    def = this->add("shading_mode", coEnum);
+    def->label = L("Shading mode");
+    def->category = L("Quality");
+    def->tooltip = L("How airbrush shades are built along the height. Layer alternation prints whole layers of the inner wall "
+                     "in the shading filament, spread evenly over the height. Sublayer thickness splits the inner wall of a layer "
+                     "into a shading part and a main color part whose heights follow the shade, which gives finer steps.");
+    def->enum_keys_map = &ConfigOptionEnum<ShadingMode>::get_enum_values();
+    def->enum_values.push_back("layer_alternation");
+    def->enum_values.push_back("sublayer");
+    def->enum_labels.push_back(L("Layer alternation"));
+    def->enum_labels.push_back(L("Sublayer thickness"));
+    def->mode = comSimple;
+    def->set_default_value(new ConfigOptionEnum<ShadingMode>(ShadingMode::LayerAlternation));
+
+    def = this->add("shading_wall_depth", coInt);
+    def->label = L("Shaded inner walls");
+    def->category = L("Quality");
+    def->tooltip = L("Number of inner walls behind the outer wall that are printed in the shading filament.");
+    def->min = 1;
+    def->max = 3;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionInt(1));
+
+    def = this->add("shading_strength", coPercent);
+    def->label = L("Shading strength");
+    def->category = L("Quality");
+    def->tooltip = L("Scales all airbrush shades. 100% prints the strongest shade with the shading filament on every layer.");
+    def->sidetext = "%";
+    def->min = 0;
+    def->max = 100;
+    def->mode = comSimple;
+    def->set_default_value(new ConfigOptionPercent(100));
+
+    def = this->add("shading_min_sublayer_height", coFloat);
+    def->label = L("Minimum shading sublayer");
+    def->category = L("Quality");
+    def->tooltip = L("Thinnest part of a layer printed in one color when the shading mode is sublayer thickness. "
+                     "Thinner parts are carried over to the next layers.");
+    def->sidetext = L("mm");
+    def->min = 0.02;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(0.04));
+
+    def = this->add("shading_outer_wall_ratio", coPercent);
+    def->label = L("Outer wall tint");
+    def->category = L("Quality");
+    def->tooltip = L("Only with sublayer thickness: also prints the bottom part of the outer wall in the shading filament, "
+                     "with this share of the shade. Gives much stronger shades, but the surface shows fine stripes. 0% keeps the outer wall in the main color.");
+    def->sidetext = "%";
+    def->min = 0;
+    def->max = 100;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionPercent(0));
 
     def = this->add("enable_prime_tower", coBool);
     def->label = L("Enable");

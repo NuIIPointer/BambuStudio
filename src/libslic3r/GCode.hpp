@@ -27,6 +27,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <unordered_map>
 
 #ifdef HAS_PRESSURE_EQUALIZER
 #include "GCode/PressureEqualizer.hpp"
@@ -657,6 +658,17 @@ private:
     coordf_t m_nominal_z;
     double   m_sub_layer_flow_ratio = 0.0;
     double   m_sub_layer_height     = 0.0;
+    // Airbrush shading: wall pieces of the current layer printed as two sublayers, one in the shading
+    // filament and one in the main filament. The filament printed first in the layer takes the bottom part.
+    struct ShadeSublayer
+    {
+        unsigned int shade_filament;
+        double       shade_height;
+        double       layer_height;
+        double       print_z;
+        bool         shade_bottom;
+    };
+    std::unordered_map<const ExtrusionEntity *, ShadeSublayer> m_shade_sublayers;
     bool m_need_change_layer_lift_z = false;
     int m_start_gcode_filament = -1;
     std::string m_filament_instances_code;
