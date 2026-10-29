@@ -3,6 +3,8 @@
 #include <cmath>
 #include <map>
 
+#include <boost/log/trivial.hpp>
+
 #include "AABBTreeIndirect.hpp"
 #include "Color.hpp"
 #include "ExtrusionEntity.hpp"
@@ -28,9 +30,10 @@ double filament_luminance(const std::string &hex)
 
 // Side surfaces only: closer to horizontal faces would make the top and bottom skins hide the side painting.
 constexpr float kMaxSideNormalZ = 0.9f;
-// Sampling step along the walls and the shortest run of one level that is kept.
-constexpr double kSampleStep  = 0.3;
-constexpr double kMinRunLength = 1.0;
+// Sampling step along the walls, the window the levels are averaged over and the shortest run of one level that is kept.
+constexpr double kSampleStep    = 0.3;
+constexpr double kSmoothWindow  = 2.0;
+constexpr double kMinRunLength  = 2.0;
 
 } // namespace
 
@@ -248,27 +251,63 @@ struct WallSplitter
         if (!any)
             return false;
 
+        // Painted levels often change from one small triangle to the next (and a spray is grainy on purpose).
+        // Average them along the wall, so that a wall piece does not change its filament every few tenths of a mm.
+        {
+            const int half_window = std::max(1, int(std::lround(0.5 * kSmoothWindow / kSampleStep)));
+            std::vector<int> smoothed(pieces.size());
+            for (int i = 0; i < int(pieces.size()); ++i) {
+                double sum = 0.;
+                int    cnt = 0;
+                for (int k = std::max(0, i - half_window); k <= std::min(int(pieces.size()) - 1, i + half_window); ++k, ++cnt)
+                    sum += pieces[k].level;
+                smoothed[i] = int(std::lround(sum / cnt));
+            }
+            for (size_t i = 0; i < pieces.size(); ++i)
+                pieces[i].level = smoothed[i];
+        }
+
         // Group the pieces into runs of one level.
         struct Run { int level; size_t begin; size_t end; double length; };
-        std::vector<Run> runs;
-        for (size_t i = 0; i < pieces.size(); ++i) {
-            if (runs.empty() || runs.back().level != pieces[i].level)
-                runs.push_back({ pieces[i].level, i, i, 0. });
-            runs.back().end = i + 1;
-            runs.back().length += pieces[i].length;
-        }
-        // Too short runs flicker, merge them into the previous (or next) run.
-        const double min_len = scale_(kMinRunLength);
-        for (size_t i = 0; i < runs.size() && runs.size() > 1; ++i)
-            if (runs[i].length < min_len)
-                runs[i].level = i > 0 ? runs[i - 1].level : runs[i + 1].level;
         std::vector<Run> merged;
-        for (const Run &run : runs) {
-            if (!merged.empty() && merged.back().level == run.level) {
-                merged.back().end = run.end;
-                merged.back().length += run.length;
-            } else
-                merged.push_back(run);
+        for (size_t i = 0; i < pieces.size(); ++i) {
+            if (merged.empty() || merged.back().level != pieces[i].level)
+                merged.push_back({ pieces[i].level, i, i, 0. });
+            merged.back().end = i + 1;
+            merged.back().length += pieces[i].length;
+        }
+        // Too short runs flicker. Merge the shortest one into the neighbor with the closer level until none is left;
+        // this does not cascade, every merge looks at the current neighbors.
+        const double min_len = scale_(kMinRunLength);
+        while (merged.size() > 1) {
+            size_t shortest = 0;
+            for (size_t i = 1; i < merged.size(); ++i)
+                if (merged[i].length < merged[shortest].length)
+                    shortest = i;
+            if (merged[shortest].length >= min_len)
+                break;
+            size_t into;
+            if (shortest == 0)
+                into = 1;
+            else if (shortest + 1 == merged.size())
+                into = shortest - 1;
+            else
+                into = std::abs(merged[shortest - 1].level - merged[shortest].level) <= std::abs(merged[shortest + 1].level - merged[shortest].level) ?
+                           shortest - 1 : shortest + 1;
+            Run &target = merged[into];
+            target.begin = std::min(target.begin, merged[shortest].begin);
+            target.end   = std::max(target.end, merged[shortest].end);
+            target.length += merged[shortest].length;
+            merged.erase(merged.begin() + shortest);
+            // Neighbors of the same level become one run.
+            for (size_t i = 1; i < merged.size();) {
+                if (merged[i - 1].level == merged[i].level) {
+                    merged[i - 1].end = merged[i].end;
+                    merged[i - 1].length += merged[i].length;
+                    merged.erase(merged.begin() + i);
+                } else
+                    ++i;
+            }
         }
         if (std::all_of(merged.begin(), merged.end(), [](const Run &r) { return r.level == 0; }))
             return false;
@@ -364,6 +403,8 @@ void split_shaded_walls(Layer &layer, const ShadeField &field, const ShadeSettin
                 for (auto &[key, collection] : groups) {
                     if (collection.entities.empty())
                         continue;
+                    BOOST_LOG_TRIVIAL(trace) << "Shading: layer " << layer.id() << " level " << int(key.first) << (key.second ? " outer" : " inner")
+                                             << " pieces " << collection.entities.size();
                     entities.push_back(new ExtrusionEntityCollection(std::move(collection)));
                     tags.push_back({ key.first, key.second });
                     any = true;

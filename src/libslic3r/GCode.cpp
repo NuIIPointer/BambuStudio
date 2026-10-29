@@ -6540,28 +6540,40 @@ std::string GCode::extrude_perimeters(const Print &print, const std::vector<Obje
             // BBS: output merged node id
             int curr_node=0;
             int cooling_node = -1;
+            // Airbrush shading sublayers: the parts this filament prints at the bottom of the layer go first, so the
+            // nozzle never goes down next to a wall that was already printed at the full layer height.
+            auto shade_part = [this](const ExtrusionEntity *ee) -> const ShadeSublayer * {
+                auto it = m_shade_sublayers.find(ee);
+                return it == m_shade_sublayers.end() || m_sub_layer_flow_ratio > 0. ? nullptr : &it->second;
+            };
+            auto prints_bottom = [this](const ShadeSublayer &shade) {
+                const bool is_shade = m_writer.filament() != nullptr && m_writer.filament()->id() == shade.shade_filament;
+                return is_shade == shade.shade_bottom;
+            };
+            for (int pass = 0; pass < 2; ++pass)
             for (size_t perimeter_idx = 0; perimeter_idx < region.perimeters.size(); ++perimeter_idx) {
-                const ExtrusionEntity *ee = region.perimeters[perimeter_idx];
+                const ExtrusionEntity *ee    = region.perimeters[perimeter_idx];
+                const ShadeSublayer   *shade = shade_part(ee);
+                const bool            bottom = shade != nullptr && prints_bottom(*shade);
+                if ((pass == 0) != bottom)
+                    continue;
                 int ee_node_id = ee->get_cooling_node();
                 if (ee_node_id != cooling_node) {
                     gcode += "; COOLING_NODE: " + std::to_string(ee_node_id) + "\n";
                 }
 
-                auto shade_it = m_shade_sublayers.find(ee);
-                if (shade_it == m_shade_sublayers.end() || m_sub_layer_flow_ratio > 0.) {
+                if (shade == nullptr) {
                     gcode += this->extrude_entity(*ee, "perimeter", -1.);
                     continue;
                 }
                 // Airbrush shading sublayer: this filament prints only its part of the layer height.
-                const ShadeSublayer &shade  = shade_it->second;
-                const bool           is_shade = m_writer.filament() != nullptr && m_writer.filament()->id() == shade.shade_filament;
-                const double         height   = is_shade ? shade.shade_height : shade.layer_height - shade.shade_height;
-                const bool           bottom   = is_shade == shade.shade_bottom;
+                const bool   is_shade = m_writer.filament() != nullptr && m_writer.filament()->id() == shade->shade_filament;
+                const double height   = is_shade ? shade->shade_height : shade->layer_height - shade->shade_height;
                 if (height <= EPSILON)
                     continue;
-                m_sub_layer_flow_ratio     = height / shade.layer_height;
+                m_sub_layer_flow_ratio     = height / shade->layer_height;
                 m_sub_layer_height         = height;
-                m_nominal_z                = bottom ? shade.print_z - shade.layer_height + height : shade.print_z;
+                m_nominal_z                = bottom ? shade->print_z - shade->layer_height + height : shade->print_z;
                 m_need_change_layer_lift_z = true;
                 m_writer.set_avoid_z_descent_travel(true);
                 gcode += "; SHADE_SUBLAYER\n";
@@ -6569,7 +6581,7 @@ std::string GCode::extrude_perimeters(const Print &print, const std::vector<Obje
                 m_writer.set_avoid_z_descent_travel(false);
                 m_sub_layer_flow_ratio     = 0.;
                 m_sub_layer_height         = 0.;
-                m_nominal_z                = shade.print_z;
+                m_nominal_z                = shade->print_z;
                 m_need_change_layer_lift_z = true;
             }
         }
