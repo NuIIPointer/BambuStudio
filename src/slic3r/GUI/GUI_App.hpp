@@ -369,6 +369,8 @@ private:
     bool             m_adding_script_handler { false };
     bool             m_side_popup_status{false};
     bool             m_show_error_msgdlg{false};
+    // The network plugin reports an unsigned build with every message; warn only once per session.
+    bool             m_unsigned_studio_warned{false};
     wxString         m_info_dialog_content;
     wxString         m_install_preset_fail_text;
     HttpServer       m_http_server;
