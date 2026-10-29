@@ -37,7 +37,9 @@ void GUI::Job::update_percent_finish()
 
 void GUI::Job::show_error_info(wxString msg, int code, wxString description, wxString extra)
 {
-    m_progress->show_error_info(msg, code, description, extra);
+    // Called from the worker thread of process(): the progress indicator resizes windows, which macOS only
+    // allows on the main thread. Queued like update_status(), so the error shows before the final status.
+    CallAfter([this, msg, code, description, extra]() { m_progress->show_error_info(msg, code, description, extra); });
 }
 
 GUI::Job::Job(std::shared_ptr<ProgressIndicator> pri)
