@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 
+#include "ExPolygon.hpp"
 #include "Point.hpp"
 
 namespace Slic3r {
@@ -43,11 +44,12 @@ inline int level_to_state(int level)
     return kLevels + std::min(level, kLevels);
 }
 
-// Tag of a perimeter island collection that holds shaded wall pieces.
+// Tag of a perimeter or fill collection that holds shaded pieces.
 struct ShadeTag
 {
     int8_t level = 0;     // signed shade level, 0 = not a shade collection
     bool   outer = false; // piece of the outer wall (only with outer wall tint)
+    bool   skin  = false; // solid infill right below a top or right above a bottom surface
 
     bool empty() const { return level == 0; }
 };
@@ -86,6 +88,10 @@ std::vector<unsigned int> used_shading_filaments(const ModelObject &object, cons
 // Plan a shade collection of a layer. main_filament is the 0-based filament the wall would use without shading.
 ShadePlan plan_shade(const ShadeSettings &settings, const ShadeTag &tag, size_t layer_id, double print_z, double layer_height, int main_filament);
 
+// Plan a shaded solid infill collection below a top or above a bottom surface. The skin is a single layer,
+// so the shade is always built from the thickness of a sublayer, in both shading modes.
+ShadePlan plan_skin_shade(const ShadeSettings &settings, const ShadeTag &tag, size_t layer_id, double layer_height, int main_filament);
+
 // Lookup of the painted shade level of the closest side surface of an object.
 class ShadeField
 {
@@ -103,6 +109,29 @@ private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;
 };
+
+// The painted shade of the top and bottom surfaces of an object, projected onto the XY plane.
+class SkinShadeField
+{
+public:
+    // Returns nullptr when no top or bottom surface of the object is painted.
+    static std::unique_ptr<SkinShadeField> build(const PrintObject &object);
+    ~SkinShadeField();
+
+    // Painted areas (scaled, object coordinates as the slices) per signed level of the upward (top) or downward
+    // (bottom) facing surfaces between z_min and z_max.
+    std::vector<std::pair<int, ExPolygons>> areas(bool top, double z_min, double z_max) const;
+
+private:
+    SkinShadeField();
+    struct Impl;
+    std::unique_ptr<Impl> m_impl;
+};
+
+// Cut the solid infill right below a painted top surface and right above a painted bottom surface into shade
+// pieces, stored as tagged collections in LayerRegion::fills. Called right after the fills of the layer were
+// generated, the slices of the neighbor layers must be final.
+void split_shaded_skins(Layer &layer, const SkinShadeField &field);
 
 // Cut the shaded parts out of the walls of a layer and store them as tagged island collections at the front
 // of LayerRegion::perimeters. Called right after the perimeters of the layer were generated.

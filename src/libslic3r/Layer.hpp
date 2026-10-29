@@ -81,6 +81,9 @@ public:
     // ordered collection of extrusion paths to fill surfaces
     // (this collection contains only ExtrusionEntityCollection objects)
     ExtrusionEntityCollection   fills;
+    // Airbrush shading: one tag per leading entry of fills.entities when the layer has shaded skins, empty otherwise.
+    // Entries appended later (ironing) have no tag.
+    std::vector<Shading::ShadeTag> fills_shade;
 
     Flow    flow(FlowRole role) const;
     Flow    flow(FlowRole role, double layer_height) const;

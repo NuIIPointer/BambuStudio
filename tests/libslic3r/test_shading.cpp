@@ -80,7 +80,7 @@ TEST_CASE("Sublayer thickness follows the shade with carried over rounding", "[S
     s.min_sublayer   = 0.04;
     const double lh  = 0.2;
 
-    for (int level : { 2, 5, 11, 16 }) {
+    for (int level : { 2, 5, 11 }) {
         const double density = double(level) / kLevels;
         double       total   = 0.;
         for (size_t layer = 1; layer <= 100; ++layer) {
@@ -89,12 +89,16 @@ TEST_CASE("Sublayer thickness follows the shade with carried over rounding", "[S
                 continue;
             CHECK(plan.height >= s.min_sublayer - EPSILON);
             CHECK(plan.height <= lh + EPSILON);
-            // The main color part is either gone or not thinner than the minimum.
-            CHECK((plan.full(lh) || lh - plan.height >= 0.5 * s.min_sublayer));
+            // The main color always keeps a top part of at least the minimum sublayer height.
+            CHECK(!plan.full(lh));
+            CHECK(lh - plan.height >= s.min_sublayer - EPSILON);
             total += plan.height;
         }
         CHECK(total == Approx(density * 100 * lh).margin(2 * s.min_sublayer));
     }
+    // The full shade is capped at the layer height minus the minimum sublayer height.
+    const ShadePlan full = plan_shade(s, { int8_t(kLevels), false }, 10, 11 * lh, lh, 0);
+    CHECK(full.height == Approx(lh - s.min_sublayer));
 }
 
 TEST_CASE("Outer wall tint only exists with sublayers", "[Shading]")
@@ -109,4 +113,37 @@ TEST_CASE("Outer wall tint only exists with sublayers", "[Shading]")
     for (size_t layer = 1; layer <= 50; ++layer)
         total += plan_shade(s, outer, layer, (layer + 1) * 0.2, 0.2, 0).height;
     CHECK(total == Approx(0.5 * 50 * 0.2).margin(0.1));
+}
+
+TEST_CASE("Object settings come from the object config, the filaments from the print config", "[Shading]")
+{
+    DynamicPrintConfig print = shading_config({ "#C12E1F", "#FFFFFF", "#000000" });
+    print.set_key_value("shading_mode", new ConfigOptionEnum<ShadingMode>(ShadingMode::LayerAlternation));
+    DynamicPrintConfig object = print;
+    object.set_key_value("shading_mode", new ConfigOptionEnum<ShadingMode>(ShadingMode::Sublayer));
+    object.set_key_value("shading_strength", new ConfigOptionPercent(50));
+    object.set_key_value("shading_dark_filament", new ConfigOptionInt(1));
+
+    const ShadeSettings s = ShadeSettings::from_config(print, object);
+    CHECK(s.sublayer);
+    CHECK(s.strength == Approx(0.5));
+    // The dark filament of the object config is ignored, only the print config chooses the shading filaments.
+    CHECK(s.dark_filament == 2);
+}
+
+TEST_CASE("Skins are shaded with a sublayer whose thickness follows the shade", "[Shading]")
+{
+    ShadeSettings s = ShadeSettings::from_config(shading_config({ "#C12E1F", "#FFFFFF", "#000000" }));
+    s.sublayer     = false; // skins use sublayers in both modes
+    s.min_sublayer = 0.04;
+    const double lh = 0.2;
+
+    CHECK(!plan_skin_shade(s, ShadeTag{ -16, false, true }, 0, lh, 0).active()); // the first layer sticks to the bed
+    CHECK(plan_skin_shade(s, ShadeTag{ -16, false, true }, 5, lh, 0).height == Approx(lh - s.min_sublayer));
+    CHECK(plan_skin_shade(s, ShadeTag{ -16, false, true }, 5, lh, 0).filament == 2);
+    const ShadePlan half = plan_skin_shade(s, ShadeTag{ 8, false, true }, 5, lh, 0);
+    CHECK(half.filament == 1);
+    CHECK(half.height == Approx(0.12)); // 0.1 rounded to the 0.04 steps
+    CHECK(!plan_skin_shade(s, ShadeTag{ 1, false, true }, 5, lh, 0).active()); // 0.0125 is below half a step
+    CHECK(!plan_skin_shade(s, ShadeTag{ 16, false, true }, 5, lh, 1).active()); // the main filament itself
 }

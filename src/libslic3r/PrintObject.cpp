@@ -1197,6 +1197,21 @@ void PrintObject::infill()
         m_print->throw_if_canceled();
         FillRadialZigZag::reset_n_lock();
         BOOST_LOG_TRIVIAL(debug) << "Filling layers in parallel - end";
+
+        // Airbrush shading: cut the shaded skins below painted top and above painted bottom surfaces out of the solid infill.
+        if (std::unique_ptr<Shading::SkinShadeField> skin_field = Shading::SkinShadeField::build(*this)) {
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, m_layers.size()), [this, &skin_field](const tbb::blocked_range<size_t> &range) {
+                for (size_t layer_idx = range.begin(); layer_idx < range.end(); ++layer_idx) {
+                    m_print->throw_if_canceled();
+                    Shading::split_shaded_skins(*m_layers[layer_idx], *skin_field);
+                }
+            });
+            m_print->throw_if_canceled();
+        } else {
+            for (Layer *layer : m_layers)
+                for (LayerRegion *layerm : layer->regions())
+                    layerm->fills_shade.clear();
+        }
         /*  we could free memory now, but this would make this step not idempotent
         ### $_->fill_surfaces->clear for map @{$_->regions}, @{$object->layers};
         */

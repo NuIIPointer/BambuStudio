@@ -836,6 +836,16 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
             }
             if (has_solid_infill || has_infill)
                 layer_tools.has_object = true;
+
+            // Airbrush shading: the shaded skins of this layer may need the shading filaments.
+            if (extruder_override == 0 && !layerm->fills_shade.empty()) {
+                const int main_filament = int(region.config().solid_infill_filament.value) - 1;
+                for (const Shading::ShadeTag &tag : layerm->fills_shade) {
+                    const Shading::ShadePlan plan = Shading::plan_skin_shade(shade_settings, tag, layer->id(), layer->height, main_filament);
+                    if (plan.active())
+                        layer_tools.extruders.emplace_back(plan.filament + 1);
+                }
+            }
         }
 
         // Record mixed slot usage for this object at this layer.

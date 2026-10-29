@@ -6,6 +6,7 @@
 #include <boost/log/trivial.hpp>
 
 #include "AABBTreeIndirect.hpp"
+#include "ClipperUtils.hpp"
 #include "Color.hpp"
 #include "ExtrusionEntity.hpp"
 #include "ExtrusionEntityCollection.hpp"
@@ -37,6 +38,10 @@ constexpr double kMinRunLength  = 2.0;
 // Automatic choice of the shading filaments: only really light or dark filaments qualify (a saturated red is about 0.3).
 constexpr double kMinAutoLight = 0.7;
 constexpr double kMaxAutoDark  = 0.2;
+// Shaded skins stay this far inside the fill area: the nozzle printing a lower sublayer would touch the walls.
+constexpr double kSkinWallClearance = 0.6;
+// Shorter shaded skin pieces stay in the main color.
+constexpr double kMinSkinPiece = 0.6;
 
 } // namespace
 
@@ -106,6 +111,17 @@ std::vector<unsigned int> used_shading_filaments(const ModelObject &object, cons
     return out;
 }
 
+namespace {
+
+// A shading filament never prints a sublayer piece at the full layer height: the main filament keeps the top part.
+// Otherwise the second shading filament could print a lower sublayer next to it later in the layer.
+double max_sublayer_height(const ShadeSettings &settings, double layer_height)
+{
+    return std::max(0.5 * layer_height, layer_height - settings.min_sublayer);
+}
+
+} // namespace
+
 ShadePlan plan_shade(const ShadeSettings &settings, const ShadeTag &tag, size_t layer_id, double print_z, double layer_height, int main_filament)
 {
     // The first layer sticks to the bed, it is never shaded.
@@ -139,9 +155,22 @@ ShadePlan plan_shade(const ShadeSettings &settings, const ShadeTag &tag, size_t 
     double       height   = quantize(density * print_z) - quantize(density * (print_z - layer_height));
     if (height < 0.5 * q)
         return {};
-    if (height > layer_height - 0.5 * q)
-        height = layer_height;
-    return { filament, height };
+    return { filament, std::min(height, max_sublayer_height(settings, layer_height)) };
+}
+
+ShadePlan plan_skin_shade(const ShadeSettings &settings, const ShadeTag &tag, size_t layer_id, double layer_height, int main_filament)
+{
+    if (tag.empty() || layer_id == 0 || layer_height <= 0.)
+        return {};
+    const int filament = settings.filament_for(tag.level);
+    if (filament < 0 || filament == main_filament)
+        return {};
+    const double density = std::clamp(std::abs(int(tag.level)) / double(kLevels) * settings.strength, 0., 1.);
+    const double q       = settings.min_sublayer;
+    const double height  = std::floor(density * layer_height / q + 0.5) * q;
+    if (height < 0.5 * q)
+        return {};
+    return { filament, std::min(height, max_sublayer_height(settings, layer_height)) };
 }
 
 struct ShadeField::Impl
@@ -423,6 +452,230 @@ void split_shaded_walls(Layer &layer, const ShadeField &field, const ShadeSettin
         layerm->perimeters.entities = std::move(entities);
         if (any)
             layerm->perimeters_shade = std::move(tags);
+    }
+}
+
+struct SkinShadeField::Impl
+{
+    struct Facet
+    {
+        Polygon xy;
+        float   z_min;
+        float   z_max;
+        int8_t  level;
+        bool    top;
+    };
+    std::vector<Facet> facets; // sorted by z_min
+};
+
+SkinShadeField::SkinShadeField() : m_impl(new Impl()) {}
+SkinShadeField::~SkinShadeField() = default;
+
+std::unique_ptr<SkinShadeField> SkinShadeField::build(const PrintObject &object)
+{
+    const ModelObject *mo = object.model_object();
+    if (mo == nullptr || !mo->is_shade_painted())
+        return nullptr;
+
+    std::unique_ptr<SkinShadeField> field(new SkinShadeField());
+    std::vector<Impl::Facet>       &facets = field->m_impl->facets;
+    const Transform3d               trafo  = object.trafo_centered();
+    for (const ModelVolume *mv : mo->volumes) {
+        if (!mv->is_model_part() || !mv->is_shade_painted())
+            continue;
+        const Transform3d                 tr = trafo * mv->get_matrix();
+        std::vector<indexed_triangle_set> per_state;
+        mv->shade_facets.get_facets(*mv, per_state);
+        for (size_t state = 1; state < per_state.size(); ++state) {
+            const int level = state_to_level(int(state));
+            if (level == 0 || per_state[state].indices.empty())
+                continue;
+            indexed_triangle_set &its = per_state[state];
+            its_transform(its, tr);
+            for (const stl_triangle_vertex_indices &f : its.indices) {
+                const Vec3f &a = its.vertices[f(0)], &b = its.vertices[f(1)], &c = its.vertices[f(2)];
+                const Vec3f  n   = (b - a).cross(c - a);
+                const float  len = n.norm();
+                if (len <= 0.f || std::abs(n.z()) <= kMaxSideNormalZ * len)
+                    continue;
+                Impl::Facet facet;
+                facet.xy.points = { Point(scale_(a.x()), scale_(a.y())), Point(scale_(b.x()), scale_(b.y())), Point(scale_(c.x()), scale_(c.y())) };
+                if (facet.xy.area() < 0.)
+                    facet.xy.reverse();
+                if (facet.xy.area() <= 0.)
+                    continue;
+                facet.z_min = std::min({ a.z(), b.z(), c.z() });
+                facet.z_max = std::max({ a.z(), b.z(), c.z() });
+                facet.level = int8_t(level);
+                facet.top   = n.z() > 0.f;
+                facets.emplace_back(std::move(facet));
+            }
+        }
+    }
+    if (facets.empty())
+        return nullptr;
+    std::sort(facets.begin(), facets.end(), [](const Impl::Facet &l, const Impl::Facet &r) { return l.z_min < r.z_min; });
+    return field;
+}
+
+std::vector<std::pair<int, ExPolygons>> SkinShadeField::areas(bool top, double z_min, double z_max) const
+{
+    std::map<int, Polygons> by_level;
+    for (const Impl::Facet &facet : m_impl->facets) {
+        if (facet.z_min > z_max)
+            break;
+        if (facet.top == top && facet.z_max >= z_min)
+            by_level[facet.level].push_back(facet.xy);
+    }
+    std::vector<std::pair<int, ExPolygons>> out;
+    for (auto &[level, polygons] : by_level) {
+        ExPolygons area = union_ex(polygons);
+        if (!area.empty())
+            out.emplace_back(level, std::move(area));
+    }
+    return out;
+}
+
+namespace {
+
+struct SkinSplitter
+{
+    const std::vector<std::pair<int, ExPolygons>> &areas;
+    const ExPolygons                              &all; // union of the areas
+    std::map<int, ExtrusionEntityCollection>      &groups;
+
+    static ExtrusionPath *make_path(const ExtrusionPath &model, Polyline &&polyline)
+    {
+        auto *path     = new ExtrusionPath(model);
+        path->polyline = std::move(polyline);
+        return path;
+    }
+
+    // Cuts the solid infill of entity along the shade areas into groups, the unshaded rest goes to main_out.
+    void split(const ExtrusionEntity &entity, ExtrusionEntitiesPtr &main_out)
+    {
+        if (const auto *collection = dynamic_cast<const ExtrusionEntityCollection *>(&entity)) {
+            auto *rest    = new ExtrusionEntityCollection();
+            rest->no_sort = collection->no_sort;
+            for (const ExtrusionEntity *ee : collection->entities)
+                this->split(*ee, rest->entities);
+            if (rest->entities.empty())
+                delete rest;
+            else
+                main_out.push_back(rest);
+            return;
+        }
+        ExtrusionPaths paths;
+        if (const auto *path = dynamic_cast<const ExtrusionPath *>(&entity))
+            paths.push_back(*path);
+        else if (const auto *multi = dynamic_cast<const ExtrusionMultiPath *>(&entity))
+            paths = multi->paths;
+        else if (const auto *loop = dynamic_cast<const ExtrusionLoop *>(&entity))
+            paths = loop->paths;
+        // Keep the entity as it is unless one of its solid infill paths reaches into a shade area.
+        auto reaches = [this](const ExtrusionPath &p) { return p.role() == erSolidInfill && !intersection_pl(p.polyline, all).empty(); };
+        if (std::none_of(paths.begin(), paths.end(), reaches)) {
+            main_out.push_back(entity.clone());
+            return;
+        }
+        for (const ExtrusionPath &path : paths) {
+            if (path.role() != erSolidInfill) {
+                main_out.push_back(new ExtrusionPath(path));
+                continue;
+            }
+            Polylines rest = diff_pl(path.polyline, all);
+            for (const auto &[level, area] : areas)
+                for (Polyline &piece : intersection_pl(path.polyline, area)) {
+                    if (piece.length() < scale_(kMinSkinPiece))
+                        rest.push_back(std::move(piece));
+                    else
+                        groups[level].entities.push_back(make_path(path, std::move(piece)));
+                }
+            for (Polyline &piece : rest)
+                main_out.push_back(make_path(path, std::move(piece)));
+        }
+    }
+};
+
+} // namespace
+
+void split_shaded_skins(Layer &layer, const SkinShadeField &field)
+{
+    for (LayerRegion *layerm : layer.regions())
+        layerm->fills_shade.clear();
+
+    // The shade goes below the top surfaces of the layer above and above the bottom surfaces of the layer below,
+    // the top and bottom layers themselves keep the main color.
+    std::vector<std::pair<int, ExPolygons>> areas;
+    ExPolygons                              taken;
+    auto add_surface = [&](bool top, const Layer *surface_layer, const Layer *beyond) {
+        if (surface_layer == nullptr)
+            return;
+        const ExPolygons surface = beyond != nullptr ? diff_ex(surface_layer->lslices, beyond->lslices) : surface_layer->lslices;
+        if (surface.empty())
+            return;
+        // Generous z range: a painted surface of another layer only matches where that layer is covered.
+        const double z     = top ? surface_layer->slice_z + 0.5 * surface_layer->height : surface_layer->slice_z - 0.5 * surface_layer->height;
+        for (auto &[level, area] : field.areas(top, z - surface_layer->height, z + surface_layer->height)) {
+            ExPolygons shaded = diff_ex(intersection_ex(area, surface), taken);
+            if (shaded.empty())
+                continue;
+            append(taken, shaded);
+            areas.emplace_back(level, std::move(shaded));
+        }
+        taken = union_ex(taken);
+    };
+    add_surface(true, layer.upper_layer, layer.upper_layer != nullptr ? layer.upper_layer->upper_layer : nullptr);
+    add_surface(false, layer.lower_layer, layer.lower_layer != nullptr ? layer.lower_layer->lower_layer : nullptr);
+    if (areas.empty())
+        return;
+
+    for (LayerRegion *layerm : layer.regions()) {
+        if (layerm->fills.entities.empty())
+            continue;
+        const ExPolygons                        inner = offset_ex(layerm->fill_expolygons, -float(scale_(kSkinWallClearance)));
+        std::vector<std::pair<int, ExPolygons>> region_areas;
+        ExPolygons                              all;
+        for (const auto &[level, area] : areas) {
+            ExPolygons shaded = intersection_ex(area, inner);
+            if (shaded.empty())
+                continue;
+            append(all, shaded);
+            region_areas.emplace_back(level, std::move(shaded));
+        }
+        if (region_areas.empty())
+            continue;
+        all = union_ex(all);
+
+        ExtrusionEntitiesPtr           entities;
+        std::vector<Shading::ShadeTag> tags;
+        bool                           any = false;
+        for (ExtrusionEntity *entity : layerm->fills.entities) {
+            std::map<int, ExtrusionEntityCollection> groups;
+            ExtrusionEntitiesPtr                     rest;
+            SkinSplitter{ region_areas, all, groups }.split(*entity, rest);
+            if (groups.empty()) {
+                for (ExtrusionEntity *ee : rest)
+                    delete ee;
+                entities.push_back(entity);
+                tags.push_back({});
+                continue;
+            }
+            for (auto &[level, collection] : groups) {
+                BOOST_LOG_TRIVIAL(trace) << "Shading: layer " << layer.id() << " skin level " << level << " pieces " << collection.entities.size();
+                entities.push_back(new ExtrusionEntityCollection(std::move(collection)));
+                tags.push_back({ int8_t(level), false, true });
+            }
+            for (ExtrusionEntity *ee : rest) {
+                entities.push_back(ee);
+                tags.push_back({});
+            }
+            delete entity;
+            any = true;
+        }
+        layerm->fills.entities = std::move(entities);
+        if (any)
+            layerm->fills_shade = std::move(tags);
     }
 }
 

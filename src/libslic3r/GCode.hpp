@@ -26,6 +26,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <functional>
 #include <string>
 #include <unordered_map>
 
@@ -669,6 +670,12 @@ private:
         bool         shade_bottom;
     };
     std::unordered_map<const ExtrusionEntity *, ShadeSublayer> m_shade_sublayers;
+    // The shade sublayer of an entity, nullptr when it is printed at the full layer height.
+    const ShadeSublayer *shade_sublayer(const ExtrusionEntity *ee) const;
+    // Whether the current filament prints the bottom part of the layer of a shaded entity.
+    bool                 shade_prints_bottom(const ShadeSublayer &shade) const;
+    // Emits extrude() at the part of the layer height the current filament prints of a shaded entity.
+    std::string          extrude_shade_sublayer(const ShadeSublayer &shade, const std::function<std::string()> &extrude);
     bool m_need_change_layer_lift_z = false;
     int m_start_gcode_filament = -1;
     std::string m_filament_instances_code;
