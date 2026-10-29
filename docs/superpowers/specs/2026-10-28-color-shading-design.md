@@ -72,3 +72,23 @@ Die automatische Wahl nimmt das physische Filament (kein Misch-Slot) mit der hö
 - Mit AMS bzw. einer Düse bedeutet jede schattierte Schicht bis zu zwei zusätzliche Filamentwechsel mit Spülung. Die Validierung gibt einen Hinweis aus. Empfohlen wird „Spülen in Infill“.
 - Spiralvase wird zusammen mit Schattierung abgelehnt.
 - Ist die Hauptfarbe ein Misch-Slot mit Teilschichten, wird im Modus `sublayer` auf `layer_alternation` zurückgefallen.
+
+## Stand der Umsetzung (2026-10-29)
+
+Umgesetzt wie oben beschrieben: Datenmodell und 3MF (`paint_shade`), Airbrush-Gizmo (Kreis/Kugel, Füllen, Verlauf; `Ctrl+J`), Wand-Aufteilung, beide Modi, Außenwand-Tönung, Werkzeugreihenfolge, genutzte Filamente, deutsche Übersetzung.
+
+Abweichungen vom Entwurf, als eigene Entscheidung:
+- Die Stufen werden entlang der Wand über 2 mm gemittelt, und Abschnitte unter 2 mm werden mit dem Nachbarn mit der ähnlicheren Stufe zusammengelegt. Grund: Nebeneinanderliegende Dreiecke unterscheiden sich oft um eine Stufe, und ein Sprühstoß ist absichtlich körnig. Ohne Mittelung würde die Wand alle paar Zehntelmillimeter das Filament wechseln.
+- Beim Erzeugen der Wände wird die Teilschicht-Reihenfolge nicht festgelegt. Beim G-Code druckt jedes Filament zuerst die Teile, bei denen es unten liegt, danach den Rest.
+- Die Bemalung wird bei „Mesh reparieren mit Bemalung erhalten“ noch nicht neu projiziert, sondern verworfen.
+
+Getestet über die Kommandozeile mit einem bemalten Zylinder: links ein Verlauf von Hell nach unverändert, rechts von unverändert nach Dunkel. Gemessen wurde der Materialanteil des Shading-Filaments an der Innenwand pro Höhenband.
+- X1C (AMS, eine Düse) und H2C (Düsenwechsler), jeweils in beiden Modi: Der Anteil folgt dem gemalten Verlauf. Im Modus Teilschicht-Dicke ist er nahezu linear (Weiß 91 % → 5 %, Schwarz 4 % → 91 %).
+- Die Außenwand bleibt ohne Tönung immer in der Hauptfarbe.
+- Teilschicht-Modus: Nach einer Außenwand in voller Höhe wird in derselben Schicht nichts tiefer gedruckt.
+- 3MF speichern und laden: Die Bemalung bleibt bit-genau erhalten.
+
+Bekannte Grenzen:
+- Druckzeit: Jede schattierte Schicht braucht Filamentwechsel. Der Testzylinder (Ø30 × 30 mm) braucht auf dem H2C rund 1 h 10 min statt 19 min.
+- H2C über die Kommandozeile: Ohne Drucker-Synchronisation fehlen Düsenbestand und Filament-Zuordnung im Projekt. Für den Test wurden sie von Hand gesetzt.
+- Die Bedienung des Gizmos ist kompiliert, aber nicht von Hand in der Oberfläche getestet.
