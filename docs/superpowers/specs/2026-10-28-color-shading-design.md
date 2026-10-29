@@ -65,7 +65,7 @@ Schritt `posPerimeters` (Änderungen am Airbrush invalidieren nur Wände und G-C
 | `shading_min_sublayer_height` | float | 0.04 | kleinste Teilschicht |
 | `shading_outer_wall_ratio` | percent | 0 % | Außenwand-Tönung, nur im Modus `sublayer` |
 
-Die automatische Wahl nimmt das physische Filament (kein Misch-Slot) mit der höchsten bzw. niedrigsten Luminanz. Ist das gewählte Filament gleich der Hauptfarbe, entfällt die Schattierung an dieser Stelle.
+Die automatische Wahl nimmt das physische Filament (kein Misch-Slot) mit der höchsten bzw. niedrigsten Luminanz, aber nur ab 0,7 (hell) bzw. bis 0,2 (dunkel). Ein kräftiges Rot (etwa 0,3) zählt also nicht als dunkel. Ist das gewählte Filament gleich der Hauptfarbe, entfällt die Schattierung an dieser Stelle.
 
 ## Grenzen und Risiken
 

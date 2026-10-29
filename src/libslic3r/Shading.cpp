@@ -34,6 +34,9 @@ constexpr float kMaxSideNormalZ = 0.9f;
 constexpr double kSampleStep    = 0.3;
 constexpr double kSmoothWindow  = 2.0;
 constexpr double kMinRunLength  = 2.0;
+// Automatic choice of the shading filaments: only really light or dark filaments qualify (a saturated red is about 0.3).
+constexpr double kMinAutoLight = 0.7;
+constexpr double kMaxAutoDark  = 0.2;
 
 } // namespace
 
@@ -72,8 +75,8 @@ ShadeSettings ShadeSettings::from_config(const ConfigBase &config)
     const int light = get_int("shading_light_filament", 0) - 1;
     const int dark  = get_int("shading_dark_filament", 0) - 1;
     // Automatic choice only when the extreme filament is really light or dark.
-    s.light_filament = physical(light) ? light : (max_l >= 0.6 ? brightest : -1);
-    s.dark_filament  = physical(dark) ? dark : (min_l >= 0. && min_l <= 0.3 ? darkest : -1);
+    s.light_filament = physical(light) ? light : (max_l >= kMinAutoLight ? brightest : -1);
+    s.dark_filament  = physical(dark) ? dark : (min_l >= 0. && min_l <= kMaxAutoDark ? darkest : -1);
     const auto *mode = config.option<ConfigOptionEnum<ShadingMode>>("shading_mode");
     s.sublayer       = mode != nullptr && mode->value == ShadingMode::Sublayer;
     s.wall_depth     = std::max(1, get_int("shading_wall_depth", 1));

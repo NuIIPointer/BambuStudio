@@ -49,6 +49,6 @@ add_test(${_TEST_NAME}_tests ${_TEST_NAME}_tests ${CATCH_EXTRA_ARGS})
 
 # Airbrush shading tests in their own executable, so they run while other suites do not compile.
 add_executable(shading_tests shading_tests_main.cpp test_shading.cpp)
-target_link_libraries(shading_tests test_common libslic3r)
+target_link_libraries(shading_tests test_common libslic3r_gui libslic3r)
 set_property(TARGET shading_tests PROPERTY FOLDER "tests")
 add_test(shading_tests shading_tests ${CATCH_EXTRA_ARGS})
