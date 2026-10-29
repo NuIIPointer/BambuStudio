@@ -49,7 +49,8 @@ struct ShadeTag
 {
     int8_t level = 0;     // signed shade level, 0 = not a shade collection
     bool   outer = false; // piece of the outer wall (only with outer wall tint)
-    bool   skin  = false; // solid infill right below a top or right above a bottom surface
+    bool   skin  = false; // solid infill below a top or above a bottom surface
+    float  cover = 0.f;   // skins: thickness of the layer inside the shade zone, 0 = the whole layer
 
     bool empty() const { return level == 0; }
 };
@@ -88,8 +89,9 @@ std::vector<unsigned int> used_shading_filaments(const ModelObject &object, cons
 // Plan a shade collection of a layer. main_filament is the 0-based filament the wall would use without shading.
 ShadePlan plan_shade(const ShadeSettings &settings, const ShadeTag &tag, size_t layer_id, double print_z, double layer_height, int main_filament);
 
-// Plan a shaded solid infill collection below a top or above a bottom surface. The skin is a single layer,
-// so the shade is always built from the thickness of a sublayer, in both shading modes.
+// Plan a shaded solid infill collection below a top or above a bottom surface. The shade zone of a skin is only
+// one wall width thick, so the shade is always built from the thickness of a sublayer, in both shading modes:
+// the shaded height is the shade density times the part of the layer inside the zone (tag.cover).
 ShadePlan plan_skin_shade(const ShadeSettings &settings, const ShadeTag &tag, size_t layer_id, double layer_height, int main_filament);
 
 // Lookup of the painted shade level of the closest side surface of an object.
@@ -128,9 +130,10 @@ private:
     std::unique_ptr<Impl> m_impl;
 };
 
-// Cut the solid infill right below a painted top surface and right above a painted bottom surface into shade
-// pieces, stored as tagged collections in LayerRegion::fills. Called right after the fills of the layer were
-// generated, the slices of the neighbor layers must be final.
+// Cut the solid infill below a painted top surface and above a painted bottom surface into shade pieces, stored as
+// tagged collections in LayerRegion::fills. The top and bottom layers keep the main color like the outer wall, the
+// shade zone behind them is one inner wall width thick like the shaded inner wall. Called right after the fills of
+// the layer were generated, the slices of the neighbor layers must be final.
 void split_shaded_skins(Layer &layer, const SkinShadeField &field);
 
 // Cut the shaded parts out of the walls of a layer and store them as tagged island collections at the front

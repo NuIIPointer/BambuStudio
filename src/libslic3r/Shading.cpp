@@ -166,8 +166,10 @@ ShadePlan plan_skin_shade(const ShadeSettings &settings, const ShadeTag &tag, si
     if (filament < 0 || filament == main_filament)
         return {};
     const double density = std::clamp(std::abs(int(tag.level)) / double(kLevels) * settings.strength, 0., 1.);
+    const double cover   = tag.cover > 0.f ? std::min(double(tag.cover), layer_height) : layer_height;
     const double q       = settings.min_sublayer;
-    const double height  = std::floor(density * layer_height / q + 0.5) * q;
+    // Never thicker than the part of the layer inside the zone, so a thin rest of the zone stays in the main color.
+    const double height  = std::min(std::floor(density * cover / q + 0.5), std::floor(cover / q + EPSILON)) * q;
     if (height < 0.5 * q)
         return {};
     return { filament, std::min(height, max_sublayer_height(settings, layer_height)) };
@@ -538,11 +540,15 @@ std::vector<std::pair<int, ExPolygons>> SkinShadeField::areas(bool top, double z
 
 namespace {
 
+// Shade area of a skin layer: the painted level and the thickness of the layer inside the shade zone (scaled).
+using SkinKey   = std::pair<int, coord_t>;
+using SkinAreas = std::vector<std::pair<SkinKey, ExPolygons>>;
+
 struct SkinSplitter
 {
-    const std::vector<std::pair<int, ExPolygons>> &areas;
-    const ExPolygons                              &all; // union of the areas
-    std::map<int, ExtrusionEntityCollection>      &groups;
+    const SkinAreas                              &areas;
+    const ExPolygons                             &all; // union of the areas
+    std::map<SkinKey, ExtrusionEntityCollection> &groups;
 
     static ExtrusionPath *make_path(const ExtrusionPath &model, Polyline &&polyline)
     {
@@ -584,12 +590,12 @@ struct SkinSplitter
                 continue;
             }
             Polylines rest = diff_pl(path.polyline, all);
-            for (const auto &[level, area] : areas)
+            for (const auto &[key, area] : areas)
                 for (Polyline &piece : intersection_pl(path.polyline, area)) {
                     if (piece.length() < scale_(kMinSkinPiece))
                         rest.push_back(std::move(piece));
                     else
-                        groups[level].entities.push_back(make_path(path, std::move(piece)));
+                        groups[key].entities.push_back(make_path(path, std::move(piece)));
                 }
             for (Polyline &piece : rest)
                 main_out.push_back(make_path(path, std::move(piece)));
@@ -604,55 +610,51 @@ void split_shaded_skins(Layer &layer, const SkinShadeField &field)
     for (LayerRegion *layerm : layer.regions())
         layerm->fills_shade.clear();
 
-    // The shade goes below the top surfaces of the layer above and above the bottom surfaces of the layer below,
-    // the top and bottom layers themselves keep the main color.
-    std::vector<std::pair<int, ExPolygons>> areas;
-    ExPolygons                              taken;
-    auto add_surface = [&](bool top, const Layer *surface_layer, const Layer *beyond) {
-        if (surface_layer == nullptr)
-            return;
-        const ExPolygons surface = beyond != nullptr ? diff_ex(surface_layer->lslices, beyond->lslices) : surface_layer->lslices;
-        if (surface.empty())
-            return;
-        // Generous z range: a painted surface of another layer only matches where that layer is covered.
-        const double z     = top ? surface_layer->slice_z + 0.5 * surface_layer->height : surface_layer->slice_z - 0.5 * surface_layer->height;
-        for (auto &[level, area] : field.areas(top, z - surface_layer->height, z + surface_layer->height)) {
-            ExPolygons shaded = diff_ex(intersection_ex(area, surface), taken);
-            if (shaded.empty())
-                continue;
-            append(taken, shaded);
-            areas.emplace_back(level, std::move(shaded));
-        }
-        taken = union_ex(taken);
-    };
-    add_surface(true, layer.upper_layer, layer.upper_layer != nullptr ? layer.upper_layer->upper_layer : nullptr);
-    add_surface(false, layer.lower_layer, layer.lower_layer != nullptr ? layer.lower_layer->lower_layer : nullptr);
-    if (areas.empty())
-        return;
-
     for (LayerRegion *layerm : layer.regions()) {
         if (layerm->fills.entities.empty())
             continue;
-        const ExPolygons                        inner = offset_ex(layerm->fill_expolygons, -float(scale_(kSkinWallClearance)));
-        std::vector<std::pair<int, ExPolygons>> region_areas;
-        ExPolygons                              all;
-        for (const auto &[level, area] : areas) {
-            ExPolygons shaded = intersection_ex(area, inner);
-            if (shaded.empty())
-                continue;
-            append(all, shaded);
-            region_areas.emplace_back(level, std::move(shaded));
-        }
+        // The top and bottom layers keep the main color. The shade zone behind them is one inner wall width thick,
+        // like the shaded inner wall behind the outer wall. Closer surfaces win where zones overlap.
+        const double zone  = layerm->flow(frPerimeter).width();
+        const double z_top = layer.print_z, z_bottom = layer.print_z - layer.height;
+        const ExPolygons inner = offset_ex(layerm->fill_expolygons, -float(scale_(kSkinWallClearance)));
+        SkinAreas        region_areas;
+        ExPolygons       taken;
+        auto add_surface = [&](bool top, const Layer *surface_layer, const Layer *beyond) {
+            // Part of this layer inside the zone of the surface layer.
+            const double zone_min = top ? surface_layer->print_z - surface_layer->height - zone : surface_layer->print_z;
+            const double zone_max = top ? surface_layer->print_z - surface_layer->height : surface_layer->print_z + zone;
+            const double cover    = std::min(z_top, zone_max) - std::max(z_bottom, zone_min);
+            if (cover <= EPSILON)
+                return;
+            const ExPolygons surface = beyond != nullptr ? diff_ex(surface_layer->lslices, beyond->lslices) : surface_layer->lslices;
+            if (surface.empty())
+                return;
+            // Generous z range: a painted surface of another layer only matches where that layer is covered.
+            const double z = top ? surface_layer->slice_z + 0.5 * surface_layer->height : surface_layer->slice_z - 0.5 * surface_layer->height;
+            for (auto &[level, area] : field.areas(top, z - surface_layer->height, z + surface_layer->height)) {
+                ExPolygons shaded = diff_ex(intersection_ex(intersection_ex(area, surface), inner), taken);
+                if (shaded.empty())
+                    continue;
+                append(taken, shaded);
+                region_areas.emplace_back(SkinKey{ level, scale_(std::min(cover, layer.height)) }, std::move(shaded));
+            }
+            taken = union_ex(taken);
+        };
+        for (const Layer *upper = layer.upper_layer; upper != nullptr && upper->print_z - upper->height - zone < z_top - EPSILON; upper = upper->upper_layer)
+            add_surface(true, upper, upper->upper_layer);
+        for (const Layer *lower = layer.lower_layer; lower != nullptr && lower->print_z + zone > z_bottom + EPSILON; lower = lower->lower_layer)
+            add_surface(false, lower, lower->lower_layer);
         if (region_areas.empty())
             continue;
-        all = union_ex(all);
+        const ExPolygons all = union_ex(taken);
 
         ExtrusionEntitiesPtr           entities;
         std::vector<Shading::ShadeTag> tags;
         bool                           any = false;
         for (ExtrusionEntity *entity : layerm->fills.entities) {
-            std::map<int, ExtrusionEntityCollection> groups;
-            ExtrusionEntitiesPtr                     rest;
+            std::map<SkinKey, ExtrusionEntityCollection> groups;
+            ExtrusionEntitiesPtr                         rest;
             SkinSplitter{ region_areas, all, groups }.split(*entity, rest);
             if (groups.empty()) {
                 for (ExtrusionEntity *ee : rest)
@@ -661,10 +663,10 @@ void split_shaded_skins(Layer &layer, const SkinShadeField &field)
                 tags.push_back({});
                 continue;
             }
-            for (auto &[level, collection] : groups) {
-                BOOST_LOG_TRIVIAL(trace) << "Shading: layer " << layer.id() << " skin level " << level << " pieces " << collection.entities.size();
+            for (auto &[key, collection] : groups) {
+                BOOST_LOG_TRIVIAL(trace) << "Shading: layer " << layer.id() << " skin level " << key.first << " cover " << unscale<double>(key.second) << " pieces " << collection.entities.size();
                 entities.push_back(new ExtrusionEntityCollection(std::move(collection)));
-                tags.push_back({ int8_t(level), false, true });
+                tags.push_back({ int8_t(key.first), false, true, float(unscale<double>(key.second)) });
             }
             for (ExtrusionEntity *ee : rest) {
                 entities.push_back(ee);

@@ -146,4 +146,9 @@ TEST_CASE("Skins are shaded with a sublayer whose thickness follows the shade", 
     CHECK(half.height == Approx(0.12)); // 0.1 rounded to the 0.04 steps
     CHECK(!plan_skin_shade(s, ShadeTag{ 1, false, true }, 5, lh, 0).active()); // 0.0125 is below half a step
     CHECK(!plan_skin_shade(s, ShadeTag{ 16, false, true }, 5, lh, 1).active()); // the main filament itself
+
+    // The last layer of the zone is only partly inside it: the shade follows that part.
+    CHECK(plan_skin_shade(s, ShadeTag{ -16, false, true, 0.1f }, 5, lh, 0).height == Approx(0.08)); // 0.1 rounded down to the steps
+    CHECK(plan_skin_shade(s, ShadeTag{ -8, false, true, 0.12f }, 5, lh, 0).height == Approx(0.04)); // half of 0.12 rounds to 0.04
+    CHECK(!plan_skin_shade(s, ShadeTag{ -16, false, true, 0.02f }, 5, lh, 0).active()); // thinner than one step
 }

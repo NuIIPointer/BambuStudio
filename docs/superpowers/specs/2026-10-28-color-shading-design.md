@@ -71,16 +71,16 @@ Die automatische Wahl nimmt das physische Filament (kein Misch-Slot) mit der hö
 
 ## Ober- und Unterseiten
 
-Bemalte Flächen mit |n_z| > 0.9 wirken auf die massive Füllung direkt unter der Oberseite bzw. direkt über der Unterseite. Die oberste und die unterste Schicht bleiben in der Hauptfarbe, wie die Außenwand.
+Bemalte Flächen mit |n_z| > 0.9 wirken auf die massive Füllung unter der Oberseite bzw. über der Unterseite. Die oberste und die unterste Schicht bleiben in der Hauptfarbe, wie die Außenwand. Die Schattenzone dahinter ist so dick wie eine Innenwand breit ist (Breite der Innenwand-Bahn, z. B. 0,45 mm), wie die eine schattierte Innenwand hinter der Außenwand. Bei 0,2 mm Schichthöhe sind das zwei ganze Schichten und ein Rest von 0,05 mm.
 
 1. Nach dem Füllungsschritt (`posInfill`) baut ein **SkinShadeField** die XY-Projektion der bemalten nach oben bzw. unten zeigenden Dreiecke pro Stufe auf.
-2. Für Schicht i: Oberseitenfläche der Schicht i+1 (`lslices(i+1) − lslices(i+2)`) geschnitten mit den nach oben zeigenden Flächen in deren Höhe, genauso die Unterseitenfläche der Schicht i−1 mit den nach unten zeigenden. Das Ergebnis wird 0,6 mm von den Wänden ferngehalten, damit die Düse einer unteren Teilschicht die Wand nicht berührt.
+2. Für Schicht i: jede höhere Schicht j, deren Schattenzone (Wandbreite unter ihrer Unterkante) in Schicht i reicht, mit ihrer Oberseitenfläche (`lslices(j) − lslices(j+1)`) geschnitten mit den nach oben zeigenden Flächen in deren Höhe, genauso die tieferen Schichten mit ihren Unterseitenflächen und den nach unten zeigenden. Näher liegende Flächen haben Vorrang. Zu jeder Fläche merkt sich das Tag (`ShadeTag::cover`), wie viel der Schicht i in der Zone liegt. Das Ergebnis wird 0,6 mm von den Wänden ferngehalten, damit die Düse einer unteren Teilschicht die Wand nicht berührt.
 3. Die Bahnen der massiven Füllung (`erSolidInfill`) werden an diesen Flächen zerschnitten. Stücke unter 0,6 mm bleiben in der Hauptfarbe. Die Schattenstücke kommen als eigene Collections in `LayerRegion::fills`, die Stufe steht in `LayerRegion::fills_shade`. Später angehängte Füllungen (Bügeln) haben keine Markierung.
-4. `plan_skin_shade`: Eine Fläche ist nur eine Schicht dick, deshalb entsteht der Ton immer über eine Teilschicht, in beiden Modi: Höhe `round(d·lh / h_min)·h_min`, höchstens `lh − h_min`.
+4. `plan_skin_shade`: Die Zone ist nur eine Wandbreite dick, deshalb entsteht der Ton immer über Teilschichten, in beiden Modi: Höhe `round(d·cover / h_min)·h_min`, höchstens `lh − h_min` und nie mehr als der Teil der Schicht in der Zone (abgerundet auf `h_min`). Ein Rest unter `h_min` bleibt in der Hauptfarbe.
 
 Die Ausgabe nutzt dieselben Teilschichten wie die Wände (zwei Durchgänge, untere Teile zuerst). Dass die Schattierfarbe nie die volle Höhe druckt, verhindert, dass ein zweites Schattierfilament später in derselben Schicht neben einem schon fertigen Stück tiefer druckt. Das kam vorher an Wandecken und im Schachbrett vor.
 
-Grenzen: Mit nur einer oberen bzw. unteren massiven Schicht gibt es keine Schicht dazwischen, dann bleibt die Fläche ohne Ton. Wie stark eine Schicht in der Hauptfarbe den Ton durchscheinen lässt, hängt vom Filament ab und ist noch nicht am Druck geprüft.
+Grenzen: Nur massive Füllung wird getönt. Hat das Objekt weniger massive Schichten, als die Zone tief ist, endet der Ton an der dünnen Füllung; mit nur einer oberen bzw. unteren massiven Schicht bleibt die Fläche ohne Ton. Wie stark eine Schicht in der Hauptfarbe den Ton durchscheinen lässt, hängt vom Filament ab und ist noch nicht am Druck geprüft.
 
 ## Grenzen und Risiken
 
