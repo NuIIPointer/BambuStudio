@@ -594,7 +594,7 @@ void PrintObject::make_perimeters()
 
     // Airbrush shading: cut the shaded parts out of the walls, they get their own filament at G-code export.
     if (std::unique_ptr<Shading::ShadeField> shade_field = Shading::ShadeField::build(*this)) {
-        const Shading::ShadeSettings shade_settings = Shading::ShadeSettings::from_config(m_print->config());
+        const Shading::ShadeSettings shade_settings = Shading::ShadeSettings::from_config(m_print->config(), this->config());
         tbb::parallel_for(tbb::blocked_range<size_t>(0, m_layers.size()), [this, &shade_field, &shade_settings](const tbb::blocked_range<size_t> &range) {
             for (size_t layer_idx = range.begin(); layer_idx < range.end(); ++layer_idx) {
                 m_print->throw_if_canceled();
@@ -1547,7 +1547,12 @@ bool PrintObject::invalidate_state_by_config_options(
             || opt_key == "initial_layer_line_width"
             || opt_key == "inner_wall_line_width"
             || opt_key == "infill_wall_overlap"
-            || opt_key == "apply_scarf_seam_on_circles") {
+            || opt_key == "apply_scarf_seam_on_circles"
+            || opt_key == "shading_mode"
+            || opt_key == "shading_wall_depth"
+            || opt_key == "shading_strength"
+            || opt_key == "shading_min_sublayer_height"
+            || opt_key == "shading_outer_wall_ratio") {
             steps.emplace_back(posPerimeters);
         } else if (opt_key == "gap_infill_speed" || opt_key == "filter_out_gap_fill") {
             // Return true if gap-fill speed has changed from zero value to non-zero or from non-zero value to zero.
@@ -3780,7 +3785,7 @@ std::vector<unsigned int> PrintObject::object_extruders() const
 #endif
     // Airbrush shading prints the inner walls with the shading filaments.
     if (mo->is_shade_painted())
-        append(extruders, Shading::used_shading_filaments(*mo, Shading::ShadeSettings::from_config(this->print()->config())));
+        append(extruders, Shading::used_shading_filaments(*mo, Shading::ShadeSettings::from_config(this->print()->config(), this->config())));
     sort_remove_duplicates(extruders);
     return extruders;
 }

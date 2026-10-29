@@ -1091,6 +1091,12 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionInt,  interlocking_depth))
     ((ConfigOptionInt,  interlocking_boundary_avoidance))
     ((ConfigOptionInt,  scarf_angle_threshold))
+    // Airbrush shading, the shading filaments are print wide (PrintConfig)
+    ((ConfigOptionEnum<ShadingMode>, shading_mode))
+    ((ConfigOptionInt,  shading_wall_depth))
+    ((ConfigOptionPercent, shading_strength))
+    ((ConfigOptionFloat, shading_min_sublayer_height))
+    ((ConfigOptionPercent, shading_outer_wall_ratio))
 
 )
 
@@ -1588,11 +1594,6 @@ PRINT_CONFIG_CLASS_DERIVED_DEFINE(
     ((ConfigOptionBool,               enable_mixed_color_sublayer))
     ((ConfigOptionInt,                shading_light_filament))
     ((ConfigOptionInt,                shading_dark_filament))
-    ((ConfigOptionEnum<ShadingMode>,  shading_mode))
-    ((ConfigOptionInt,                shading_wall_depth))
-    ((ConfigOptionPercent,            shading_strength))
-    ((ConfigOptionFloat,              shading_min_sublayer_height))
-    ((ConfigOptionPercent,            shading_outer_wall_ratio))
     ((ConfigOptionBool,               enable_prime_tower))
     ((ConfigOptionBool,               prime_tower_enable_framework))
     // BBS: change wipe_tower_x and wipe_tower_y data type to floats to add partplate logic

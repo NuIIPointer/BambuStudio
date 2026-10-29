@@ -4868,7 +4868,6 @@ GCode::LayerResult GCode::process_layer(
     std::map<unsigned int, std::vector<ObjectByExtruder>> by_extruder;
     std::map<std::pair<const SupportLayer *, ExtrusionRole>, unsigned int> support_filaments;
     bool is_anything_overridden = const_cast<LayerTools&>(layer_tools).wiping_extrusions().is_anything_overridden();
-    const Shading::ShadeSettings shade_settings = Shading::ShadeSettings::from_config(print.config());
     m_shade_sublayers.clear();
     for (const LayerToPrint &layer_to_print : layers) {
         if (layer_to_print.support_layer != nullptr) {
@@ -4983,6 +4982,7 @@ GCode::LayerResult GCode::process_layer(
 
         if (layer_to_print.object_layer != nullptr) {
             const Layer &layer = *layer_to_print.object_layer;
+            const Shading::ShadeSettings shade_settings = Shading::ShadeSettings::from_config(print.config(), layer.object()->config());
             // We now define a strategy for building perimeters and fills. The separation
             // between regions doesn't matter in terms of printing order, as we follow
             // another logic instead:

@@ -23869,14 +23869,14 @@ msgstr ""
 msgid "Lighter shading filament"
 msgstr "Filament für helleres Shading"
 
-msgid "Filament printed behind the outer wall where the airbrush painted lighter shades. 0 picks the brightest filament automatically."
-msgstr "Filament, das hinter der Außenwand gedruckt wird, wo der Airbrush hellere Töne gesprüht hat. 0 wählt automatisch das hellste Filament."
+msgid "Filament printed behind the outer wall where the airbrush painted lighter shades. \"Default\" picks the brightest filament automatically."
+msgstr "Filament, das hinter der Außenwand gedruckt wird, wo der Airbrush hellere Töne gesprüht hat. „Standard“ wählt automatisch das hellste Filament."
 
 msgid "Darker shading filament"
 msgstr "Filament für dunkleres Shading"
 
-msgid "Filament printed behind the outer wall where the airbrush painted darker shades. 0 picks the darkest filament automatically."
-msgstr "Filament, das hinter der Außenwand gedruckt wird, wo der Airbrush dunklere Töne gesprüht hat. 0 wählt automatisch das dunkelste Filament."
+msgid "Filament printed behind the outer wall where the airbrush painted darker shades. \"Default\" picks the darkest filament automatically."
+msgstr "Filament, das hinter der Außenwand gedruckt wird, wo der Airbrush dunklere Töne gesprüht hat. „Standard“ wählt automatisch das dunkelste Filament."
 
 msgid "Shading mode"
 msgstr "Shading-Modus"

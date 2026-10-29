@@ -52,7 +52,7 @@ struct ShadeTag
     bool empty() const { return level == 0; }
 };
 
-// Print wide shading settings resolved to physical filaments.
+// Shading settings of one object, the shading filaments resolved to physical filaments.
 struct ShadeSettings
 {
     int    light_filament = -1; // 0-based, -1 = none available
@@ -63,8 +63,10 @@ struct ShadeSettings
     double min_sublayer   = 0.04;
     double outer_ratio    = 0.;
 
-    // Works on a PrintConfig as well as on a full DynamicPrintConfig of the GUI.
-    static ShadeSettings from_config(const ConfigBase &config);
+    // The shading filaments come from the print config, the other settings from the object config.
+    static ShadeSettings from_config(const ConfigBase &print_config, const ConfigBase &object_config);
+    // Both from one full config, e.g. the full DynamicPrintConfig of the GUI.
+    static ShadeSettings from_config(const ConfigBase &config) { return from_config(config, config); }
     int filament_for(int level) const { return level < 0 ? dark_filament : light_filament; }
 };
 

@@ -741,7 +741,7 @@ void ToolOrdering::collect_extruders(const PrintObject &object, const std::vecto
         }
     }
 
-    const Shading::ShadeSettings shade_settings = Shading::ShadeSettings::from_config(object.print()->config());
+    const Shading::ShadeSettings shade_settings = Shading::ShadeSettings::from_config(object.print()->config(), object.config());
 
     // BBS: collect first layer extruders of an object's wall, which will be used by brim generator
     int layerCount = 0;

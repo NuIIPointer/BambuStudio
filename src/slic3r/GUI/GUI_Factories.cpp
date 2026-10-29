@@ -83,7 +83,9 @@ std::map<std::string, std::vector<SimpleSettingData>>  SettingsFactory::OBJECT_C
                     {"seam_position", "",3}, {"seam_gap", "",4}, {"wipe_speed", "",5},
                     {"slice_closing_radius", "",6}, {"resolution", "",7},
                     {"xy_hole_compensation", "",8}, {"xy_contour_compensation", "",9}, {"elefant_foot_compensation", "",10},
-                    {"precise_z_height", "",10}
+                    {"precise_z_height", "",10},
+                    {"shading_mode", "",11}, {"shading_strength", "",12}, {"shading_wall_depth", "",13},
+                    {"shading_min_sublayer_height", "",14}, {"shading_outer_wall_ratio", "",15}
 
                     }},
     { L("Support"), {{"brim_type", "",1},{"brim_width", "",2},{"brim_object_gap", "",3},

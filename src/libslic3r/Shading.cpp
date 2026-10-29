@@ -40,15 +40,15 @@ constexpr double kMaxAutoDark  = 0.2;
 
 } // namespace
 
-ShadeSettings ShadeSettings::from_config(const ConfigBase &config)
+ShadeSettings ShadeSettings::from_config(const ConfigBase &config, const ConfigBase &object_config)
 {
     ShadeSettings s;
-    auto get_int = [&config](const char *key, int def) {
-        const ConfigOption *opt = config.option(key);
+    auto get_int = [](const ConfigBase &cfg, const char *key, int def) {
+        const ConfigOption *opt = cfg.option(key);
         return opt != nullptr ? opt->getInt() : def;
     };
-    auto get_float = [&config](const char *key, double def) {
-        const ConfigOption *opt = config.option(key);
+    auto get_float = [&object_config](const char *key, double def) {
+        const ConfigOption *opt = object_config.option(key);
         return opt != nullptr ? opt->getFloat() : def;
     };
     static const std::vector<std::string>   no_colors;
@@ -72,14 +72,14 @@ ShadeSettings ShadeSettings::from_config(const ConfigBase &config)
         if (l < min_l) { min_l = l; darkest = i; }
     }
 
-    const int light = get_int("shading_light_filament", 0) - 1;
-    const int dark  = get_int("shading_dark_filament", 0) - 1;
+    const int light = get_int(config, "shading_light_filament", 0) - 1;
+    const int dark  = get_int(config, "shading_dark_filament", 0) - 1;
     // Automatic choice only when the extreme filament is really light or dark.
     s.light_filament = physical(light) ? light : (max_l >= kMinAutoLight ? brightest : -1);
     s.dark_filament  = physical(dark) ? dark : (min_l >= 0. && min_l <= kMaxAutoDark ? darkest : -1);
-    const auto *mode = config.option<ConfigOptionEnum<ShadingMode>>("shading_mode");
+    const auto *mode = object_config.option<ConfigOptionEnum<ShadingMode>>("shading_mode");
     s.sublayer       = mode != nullptr && mode->value == ShadingMode::Sublayer;
-    s.wall_depth     = std::max(1, get_int("shading_wall_depth", 1));
+    s.wall_depth     = std::max(1, get_int(object_config, "shading_wall_depth", 1));
     s.strength       = std::clamp(get_float("shading_strength", 100.) / 100., 0., 1.);
     s.min_sublayer   = std::max(0.01, get_float("shading_min_sublayer_height", 0.04));
     s.outer_ratio    = std::clamp(get_float("shading_outer_wall_ratio", 0.) / 100., 0., 1.);

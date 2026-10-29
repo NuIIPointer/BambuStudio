@@ -6255,19 +6255,21 @@ void PrintConfigDef::init_fff_params()
     def->set_default_value(new ConfigOptionBool(false));
 
     def = this->add("shading_light_filament", coInt);
+    def->gui_type = ConfigOptionDef::GUIType::i_enum_open;
     def->label = L("Lighter shading filament");
     def->category = L("Quality");
     def->tooltip = L("Filament printed behind the outer wall where the airbrush painted lighter shades. "
-                     "0 picks the brightest filament automatically.");
+                     "\"Default\" picks the brightest filament automatically.");
     def->min = 0;
     def->mode = comSimple;
     def->set_default_value(new ConfigOptionInt(0));
 
     def = this->add("shading_dark_filament", coInt);
+    def->gui_type = ConfigOptionDef::GUIType::i_enum_open;
     def->label = L("Darker shading filament");
     def->category = L("Quality");
     def->tooltip = L("Filament printed behind the outer wall where the airbrush painted darker shades. "
-                     "0 picks the darkest filament automatically.");
+                     "\"Default\" picks the darkest filament automatically.");
     def->min = 0;
     def->mode = comSimple;
     def->set_default_value(new ConfigOptionInt(0));

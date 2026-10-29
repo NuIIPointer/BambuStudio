@@ -2508,6 +2508,8 @@ Sidebar::Sidebar(Plater *parent)
     Choice::register_dynamic_list("wall_filament", &dynamic_filament_list);
     Choice::register_dynamic_list("sparse_infill_filament", &dynamic_filament_list);
     Choice::register_dynamic_list("solid_infill_filament", &dynamic_filament_list);
+    Choice::register_dynamic_list("shading_light_filament", &dynamic_filament_list);
+    Choice::register_dynamic_list("shading_dark_filament", &dynamic_filament_list);
 
     p->scrolled = new wxPanel(this);
     //    p->scrolled->SetScrollbars(0, 100, 1, 2); // ys_DELETE_after_testing. pixelsPerUnitY = 100
@@ -25045,7 +25047,7 @@ void Plater::on_filaments_delete(size_t num_filaments, size_t filament_id, int r
     // becomes "Default" (0) on a plain delete, or follows the target on a "Merge with"; otherwise the
     // stored index is shifted down. Apply to both the edited print preset (drives slicing and the Print
     // tab) and the Plater's cached subset so they stay consistent.
-    static const char *keys[] = {"support_filament", "support_interface_filament"};
+    static const char *keys[] = {"support_filament", "support_interface_filament", "shading_light_filament", "shading_dark_filament"};
     auto               remap_support_filament = [&](DynamicPrintConfig &cfg) {
         for (auto key : keys) {
             if (!cfg.has(key)) continue;
@@ -25241,7 +25243,7 @@ void Plater::on_config_change(const DynamicPrintConfig &config)
         }
         // BBS
         else if (opt_key == "support_interface_filament" || opt_key == "support_filament" || opt_key == "wall_filament" || opt_key == "sparse_infill_filament" ||
-                 opt_key == "solid_infill_filament") {
+                 opt_key == "solid_infill_filament" || opt_key == "shading_light_filament" || opt_key == "shading_dark_filament") {
             update_scheduled = true;
         }
     }

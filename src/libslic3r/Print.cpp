@@ -390,12 +390,7 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
             || opt_key == "embedding_wall_into_infill"
             || opt_key == "alternate_extra_wall"
             || opt_key == "shading_light_filament"
-            || opt_key == "shading_dark_filament"
-            || opt_key == "shading_mode"
-            || opt_key == "shading_wall_depth"
-            || opt_key == "shading_strength"
-            || opt_key == "shading_min_sublayer_height"
-            || opt_key == "shading_outer_wall_ratio") {
+            || opt_key == "shading_dark_filament") {
             osteps.emplace_back(posPerimeters);
             osteps.emplace_back(posInfill);
             osteps.emplace_back(posSupportMaterial);
