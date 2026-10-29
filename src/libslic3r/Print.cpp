@@ -7,6 +7,7 @@
 #include "Flow.hpp"
 #include "Geometry/ConvexHull.hpp"
 #include "I18N.hpp"
+#include "Shading.hpp"
 #include "ShortestPath.hpp"
 #include "Support/SupportMaterial.hpp"
 #include "Thread.hpp"
@@ -466,6 +467,10 @@ std::vector<unsigned int> Print::object_extruders() const
                 extruders.push_back(extruder - 1);
             }
         }
+
+        // Airbrush shading prints the inner walls with the shading filaments, which needs the prime tower.
+        if (mo->is_shade_painted())
+            append(extruders, Shading::used_shading_filaments(*mo, Shading::ShadeSettings::from_config(m_config, object->config())));
 
         // layer range
         for (auto layer_range : mo->layer_config_ranges) {
